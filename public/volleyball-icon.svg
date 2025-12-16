@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Blue background circle -->
+  <circle cx="256" cy="256" r="256" fill="#3b82f6"/>
+
+  <!-- White volleyball -->
+  <circle cx="256" cy="256" r="180" fill="#ffffff"/>
+
+  <!-- Volleyball lines -->
+  <g stroke="#3b82f6" stroke-width="8" fill="none">
+    <!-- Center vertical line -->
+    <line x1="256" y1="76" x2="256" y2="436"/>
+
+    <!-- Left curve -->
+    <path d="M 140 150 Q 200 256 140 362"/>
+
+    <!-- Right curve -->
+    <path d="M 372 150 Q 312 256 372 362"/>
+
+    <!-- Top curve -->
+    <path d="M 150 140 Q 256 200 362 140"/>
+
+    <!-- Bottom curve -->
+    <path d="M 150 372 Q 256 312 362 372"/>
+  </g>
+</svg>

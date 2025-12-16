@@ -1,0 +1,170 @@
+@import "tailwindcss";
+
+@theme {
+  --color-rally-coral: #E07C7C;
+  --color-rally-pink: #D97373;
+  --color-rally-dark: #0F172A;
+  --color-rally-darker: #0A0F1E;
+  --color-rally-light: #1E293B;
+  --color-rally-accent: #FF6B6B;
+
+  --animate-pulse-slow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-bounce-slow: bounce 2s infinite;
+  --animate-fade-in: fadeIn 0.5s ease-in-out;
+  --animate-slide-up: slideUp 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes slideUp {
+  0% { transform: translateY(20px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+body {
+  background-color: var(--color-rally-darker);
+  color: rgb(243 244 246);
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.card-glass {
+  background-color: rgb(30 41 59 / 0.5);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 1rem;
+  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #E07C7C 0%, #FF6B6B 100%);
+  color: white;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.75rem;
+  transition: all 0.3s;
+}
+
+.btn-primary:hover {
+  box-shadow: 0 10px 15px -3px rgb(224 124 124 / 0.5);
+  transform: scale(1.05);
+}
+
+.btn-primary:active {
+  transform: scale(0.95);
+}
+
+.btn-secondary {
+  background-color: var(--color-rally-light);
+  color: rgb(243 244 246);
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgb(224 124 124 / 0.3);
+  transition: all 0.3s;
+}
+
+.btn-secondary:hover {
+  border-color: var(--color-rally-coral);
+  background-color: rgb(30 41 59 / 0.8);
+}
+
+.input-modern {
+  background-color: rgb(30 41 59 / 0.5);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  color: rgb(243 244 246);
+  transition: all 0.3s;
+}
+
+.input-modern::placeholder {
+  color: rgb(156 163 175);
+}
+
+.input-modern:focus {
+  outline: none;
+  ring: 2px;
+  ring-color: var(--color-rally-coral);
+  border-color: transparent;
+  box-shadow: 0 0 0 2px var(--color-rally-coral);
+}
+
+.stat-card {
+  background-color: rgb(30 41 59 / 0.5);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 1rem;
+  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+  padding: 1.5rem;
+  text-align: center;
+  transition: transform 0.3s;
+}
+
+.stat-card:hover {
+  transform: scale(1.05);
+}
+
+.bg-gradient-rally {
+  background: linear-gradient(135deg, #E07C7C 0%, #FF6B6B 100%);
+}
+
+.text-gradient-rally {
+  background: linear-gradient(135deg, #E07C7C 0%, #FF6B6B 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.bg-rally-darker {
+  background-color: var(--color-rally-darker);
+}
+
+.bg-rally-dark {
+  background-color: var(--color-rally-dark);
+}
+
+.bg-rally-light {
+  background-color: var(--color-rally-light);
+}
+
+.text-rally-coral {
+  color: var(--color-rally-coral);
+}
+
+.text-rally-accent {
+  color: var(--color-rally-accent);
+}
+
+.border-rally-coral {
+  border-color: var(--color-rally-coral);
+}
+
+.ring-rally-coral {
+  ring-color: var(--color-rally-coral);
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.5s ease-out;
+}
+
+.animate-pulse-slow {
+  animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
