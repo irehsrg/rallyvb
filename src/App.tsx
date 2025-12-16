@@ -8,6 +8,7 @@ import Leaderboard from './pages/Leaderboard';
 import Profile from './pages/Profile';
 import Admin from './pages/Admin';
 import SessionHistory from './pages/SessionHistory';
+import GuestCheckin from './pages/GuestCheckin';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -42,6 +43,7 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
       <Route path="/signup" element={user ? <Navigate to="/" /> : <Signup />} />
+      <Route path="/guest-checkin/:sessionId" element={<GuestCheckin />} />
 
       <Route
         path="/"

@@ -166,7 +166,7 @@ export default function Leaderboard() {
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-4 text-sm text-gray-400">
+                    <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-gray-400">
                       <span className="flex items-center gap-1">
                         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                           <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
@@ -175,22 +175,22 @@ export default function Leaderboard() {
                       </span>
                       <span className="flex items-center gap-1">
                         <div className={`w-2 h-2 rounded-full ${winRate >= 50 ? 'bg-green-400' : 'bg-red-400'}`}></div>
-                        {winRate}% win rate
+                        {winRate}% win
                       </span>
                       {player.win_streak > 0 && (
                         <span className="flex items-center gap-1 text-orange-400">
-                          🔥 {player.win_streak} streak
+                          🔥 {player.win_streak}
                         </span>
                       )}
                     </div>
                   </div>
 
-                  {/* Rating Display */}
-                  <div className="text-right flex-shrink-0">
-                    <div className="text-3xl font-bold text-gradient-rally">
+                  {/* Rating Display - Responsive */}
+                  <div className="text-right flex-shrink-0 ml-2">
+                    <div className="text-2xl sm:text-3xl font-bold text-gradient-rally">
                       {player.rating}
                     </div>
-                    <div className="text-xs text-gray-500 uppercase tracking-wider">Rating</div>
+                    <div className="text-xs text-gray-500 uppercase tracking-wider hidden sm:block">Rating</div>
                   </div>
 
                   {/* Stats Grid (Desktop) */}
@@ -213,7 +213,7 @@ export default function Leaderboard() {
                   {currentPlayer && currentPlayer.id !== player.id && (
                     <button
                       onClick={() => setSelectedOpponent(player)}
-                      className="ml-4 px-4 py-2 rounded-lg bg-rally-dark/50 hover:bg-rally-coral/20 text-gray-400 hover:text-rally-coral border border-transparent hover:border-rally-coral/30 transition-all text-sm font-medium"
+                      className="hidden sm:block ml-4 px-4 py-2 rounded-lg bg-rally-dark/50 hover:bg-rally-coral/20 text-gray-400 hover:text-rally-coral border border-transparent hover:border-rally-coral/30 transition-all text-sm font-medium"
                     >
                       H2H
                     </button>

@@ -5,6 +5,7 @@ import { Session as SessionType, SessionCheckin, Player, Game } from '../types';
 import { generateTeams } from '../utils/teams';
 import { calculateBalanceScore, calculateEloChange } from '../utils/elo';
 import { useNavigate } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 
 export default function Admin() {
   const { player } = useAuth();
@@ -15,6 +16,8 @@ export default function Admin() {
   const [loading, setLoading] = useState(true);
   const [courtCount, setCourtCount] = useState(2);
   const [sessionDate, setSessionDate] = useState(new Date().toISOString().split('T')[0]);
+  const [locationName, setLocationName] = useState('');
+  const [showQRCode, setShowQRCode] = useState(false);
 
   useEffect(() => {
     if (!player?.is_admin) {
@@ -83,6 +86,7 @@ export default function Admin() {
           status: 'setup',
           court_count: courtCount,
           created_by: player?.id,
+          location_name: locationName || null,
         })
         .select()
         .single();
@@ -91,9 +95,38 @@ export default function Admin() {
       setActiveSession(data);
       alert(`Session created successfully for ${new Date(sessionDate).toLocaleDateString()}!`);
       setSessionDate(new Date().toISOString().split('T')[0]); // Reset to today
+      setLocationName('');
     } catch (error: any) {
       console.error('Error creating session:', error);
       alert('Failed to create session: ' + error.message);
+    }
+  };
+
+  const handleEndSession = async () => {
+    if (!activeSession) return;
+
+    if (!confirm('Are you sure you want to end this session? All incomplete games will remain as-is.')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('sessions')
+        .update({
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', activeSession.id);
+
+      if (error) throw error;
+
+      alert('Session ended successfully!');
+      setActiveSession(null);
+      setCheckins([]);
+      setGames([]);
+    } catch (error: any) {
+      console.error('Error ending session:', error);
+      alert('Failed to end session: ' + error.message);
     }
   };
 
@@ -296,6 +329,18 @@ export default function Admin() {
                   className="input-modern w-full"
                 />
               </div>
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Location / Gym Name <span className="text-gray-500">(Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={locationName}
+                  onChange={(e) => setLocationName(e.target.value)}
+                  className="input-modern w-full"
+                  placeholder="e.g. Downtown Gym, Venice Beach Courts"
+                />
+              </div>
             </div>
             <button onClick={handleCreateSession} className="btn-primary w-full">
               <span className="flex items-center justify-center gap-2">
@@ -315,7 +360,7 @@ export default function Admin() {
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                 <div>
                   <h2 className="text-2xl font-bold text-gray-100 mb-2">Current Session</h2>
-                  <div className="flex items-center gap-4 text-gray-400">
+                  <div className="flex flex-wrap items-center gap-4 text-gray-400">
                     <span className="flex items-center gap-2">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -329,15 +374,47 @@ export default function Admin() {
                       </svg>
                       {activeSession.court_count} courts
                     </span>
+                    {activeSession.location_name && (
+                      <span className="flex items-center gap-2 text-rally-coral">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                        {activeSession.location_name}
+                      </span>
+                    )}
                   </div>
                 </div>
-                <span className={`px-4 py-2 rounded-xl text-sm font-bold ${
-                  activeSession.status === 'setup'
-                    ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-                    : 'bg-green-500/20 text-green-400 border border-green-500/30'
-                }`}>
-                  {activeSession.status.toUpperCase()}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className={`px-4 py-2 rounded-xl text-sm font-bold ${
+                    activeSession.status === 'setup'
+                      ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                      : 'bg-green-500/20 text-green-400 border border-green-500/30'
+                  }`}>
+                    {activeSession.status.toUpperCase()}
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-3 mb-6">
+                <button
+                  onClick={() => setShowQRCode(true)}
+                  className="flex-1 px-4 py-3 bg-rally-dark/50 hover:bg-rally-dark border border-white/10 hover:border-rally-coral/30 text-gray-100 rounded-xl transition-all flex items-center justify-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                  </svg>
+                  Guest Check-in QR Code
+                </button>
+                <button
+                  onClick={handleEndSession}
+                  className="flex-1 px-4 py-3 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 hover:border-red-500/50 text-red-400 rounded-xl transition-all flex items-center justify-center gap-2 font-semibold"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  End Session
+                </button>
               </div>
 
               {/* Checked-in Players */}
@@ -390,6 +467,55 @@ export default function Admin() {
               </div>
             )}
           </>
+        )}
+
+        {/* QR Code Modal */}
+        {showQRCode && activeSession && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="card-glass max-w-md w-full p-8 animate-fade-in">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-100">Guest Check-in QR Code</h2>
+                <button
+                  onClick={() => setShowQRCode(false)}
+                  className="w-8 h-8 rounded-lg bg-rally-dark/50 hover:bg-rally-dark flex items-center justify-center transition-colors"
+                >
+                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="bg-white p-6 rounded-2xl mb-6">
+                <QRCodeSVG
+                  value={`${window.location.origin}/guest-checkin/${activeSession.id}`}
+                  size={256}
+                  level="H"
+                  includeMargin={true}
+                  className="w-full h-auto"
+                />
+              </div>
+
+              <div className="text-center">
+                <p className="text-gray-300 mb-2 font-medium">
+                  Scan to check in as a guest
+                </p>
+                <p className="text-sm text-gray-500">
+                  Players can scan this code to check in without creating an account
+                </p>
+                {activeSession.location_name && (
+                  <p className="text-sm text-rally-coral mt-3">
+                    {activeSession.location_name}
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-6 p-4 bg-rally-dark/50 rounded-xl">
+                <p className="text-xs text-gray-400 text-center">
+                  <strong className="text-gray-300">Note:</strong> Guest accounts are temporary and won't save rating history
+                </p>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

@@ -18,6 +18,7 @@
   "license": "MIT",
   "dependencies": {
     "@supabase/supabase-js": "^2.87.3",
+    "qrcode.react": "^4.2.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-router-dom": "^7.10.1",

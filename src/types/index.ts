@@ -22,6 +22,8 @@ export interface Session {
   created_by: string;
   created_at: string;
   completed_at: string | null;
+  location?: string;
+  location_name?: string;
 }
 
 export interface SessionCheckin {
