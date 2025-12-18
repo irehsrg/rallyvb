@@ -47,7 +47,8 @@ export default function GuestCheckin() {
 
     try {
       // Create or find guest player
-      const guestEmail = `guest_${Date.now()}_${Math.random().toString(36).substring(7)}@rally.guest`;
+      // Use simple format: guest{timestamp}@rally.app (no underscores or special chars)
+      const guestEmail = `guest${Date.now()}${Math.random().toString(36).substring(2, 6)}@rally.app`;
 
       // Check if guest already exists (by name in this session)
       const { data: existingCheckin } = await supabase
@@ -79,36 +80,87 @@ export default function GuestCheckin() {
         },
       });
 
-      if (authError) throw authError;
+      if (authError) {
+        console.error('Auth error:', authError);
+        throw authError;
+      }
 
-      if (authData.user) {
-        // Create player record
-        const { data: playerData, error: playerError } = await supabase
+      console.log('Auth successful:', { hasUser: !!authData.user, hasSession: !!authData.session });
+
+      if (authData.user && authData.session) {
+        console.log('Setting session...');
+        // Ensure the session is set for subsequent requests
+        await supabase.auth.setSession({
+          access_token: authData.session.access_token,
+          refresh_token: authData.session.refresh_token,
+        });
+
+        console.log('Creating player record...');
+        // Create player record (now with authenticated context)
+        let playerData;
+        const { data: insertData, error: playerError } = await supabase
           .from('players')
           .insert({
             id: authData.user.id,
             name: `${guestName.trim()} (Guest)`,
             rating: 1500,
+            is_guest: true, // Mark as guest to exclude from leaderboards
           })
           .select()
           .single();
 
-        if (playerError) throw playerError;
+        if (playerError) {
+          // If duplicate key error, fetch the existing player instead
+          if (playerError.code === '23505') {
+            console.log('Player already exists, fetching existing record...');
+            const { data: existingPlayer, error: fetchError } = await supabase
+              .from('players')
+              .select()
+              .eq('id', authData.user.id)
+              .single();
+
+            if (fetchError) {
+              console.error('Error fetching existing player:', fetchError);
+              throw fetchError;
+            }
+            playerData = existingPlayer;
+          } else {
+            console.error('Player insert error:', playerError);
+            throw playerError;
+          }
+        } else {
+          playerData = insertData;
+        }
+
+        console.log('Player ready:', playerData);
 
         // Check in to session
-        const { error: checkinError } = await supabase
+        console.log('Attempting to check in guest player:', playerData.id, 'to session:', session.id);
+        const { data: checkinData, error: checkinError } = await supabase
           .from('session_checkins')
           .insert({
             session_id: session.id,
             player_id: playerData.id,
-          });
+          })
+          .select();
 
-        if (checkinError) throw checkinError;
+        console.log('Check-in response:', { data: checkinData, error: checkinError });
 
+        if (checkinError) {
+          console.error('Check-in insert error:', checkinError);
+          alert(`Check-in failed: ${checkinError.message}`);
+          throw checkinError;
+        }
+
+        console.log('Check-in successful:', checkinData);
+        alert('Guest checked in successfully!');
         setSuccess(true);
         setTimeout(() => {
           navigate('/');
         }, 2000);
+      } else {
+        console.error('Missing user or session after signup:', { user: authData.user, session: authData.session });
+        throw new Error('Failed to create guest session');
       }
     } catch (error: any) {
       console.error('Error with guest check-in:', error);

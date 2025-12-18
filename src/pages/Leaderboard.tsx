@@ -4,6 +4,136 @@ import { Player } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import HeadToHeadModal from '../components/HeadToHeadModal';
 
+interface RatingAdjustmentModalProps {
+  player: Player;
+  onClose: () => void;
+  onUpdate: () => void;
+}
+
+function RatingAdjustmentModal({ player, onClose, onUpdate }: RatingAdjustmentModalProps) {
+  const [newRating, setNewRating] = useState(player.rating);
+  const [reason, setReason] = useState('');
+  const [adjusting, setAdjusting] = useState(false);
+
+  const handleAdjust = async () => {
+    if (!reason.trim()) {
+      alert('Please provide a reason for the adjustment');
+      return;
+    }
+
+    if (newRating === player.rating) {
+      alert('Rating is unchanged');
+      return;
+    }
+
+    setAdjusting(true);
+    try {
+      const { error } = await supabase
+        .from('players')
+        .update({ rating: newRating })
+        .eq('id', player.id);
+
+      if (error) throw error;
+
+      // Log the adjustment in rating_history
+      await supabase.from('rating_history').insert({
+        player_id: player.id,
+        game_id: null, // null indicates manual adjustment
+        previous_rating: player.rating,
+        new_rating: newRating,
+        change: newRating - player.rating,
+        reason,
+      });
+
+      onUpdate();
+      onClose();
+    } catch (error) {
+      console.error('Error adjusting rating:', error);
+      alert('Failed to adjust rating');
+    } finally {
+      setAdjusting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="card-glass p-8 max-w-md w-full">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-gray-100">Adjust Rating</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-200">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="space-y-4 mb-6">
+          <div>
+            <div className="text-sm text-gray-400 mb-2">Player</div>
+            <div className="text-lg font-semibold text-gray-100">{player.name}</div>
+          </div>
+
+          <div>
+            <div className="text-sm text-gray-400 mb-2">Current Rating</div>
+            <div className="text-3xl font-bold text-gradient-rally">{player.rating}</div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              New Rating
+            </label>
+            <input
+              type="number"
+              value={newRating}
+              onChange={(e) => setNewRating(parseInt(e.target.value) || player.rating)}
+              className="input-modern w-full"
+              min="0"
+              max="3000"
+            />
+            {newRating !== player.rating && (
+              <div className={`text-sm mt-2 font-medium ${
+                newRating > player.rating ? 'text-green-400' : 'text-red-400'
+              }`}>
+                {newRating > player.rating ? '+' : ''}{newRating - player.rating} change
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Reason for Adjustment <span className="text-red-400">*</span>
+            </label>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              className="input-modern w-full"
+              rows={3}
+              placeholder="e.g. Incorrect initial rating, tournament performance..."
+              maxLength={200}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              {reason.length} / 200 characters
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <button onClick={onClose} className="btn-secondary flex-1">
+            Cancel
+          </button>
+          <button
+            onClick={handleAdjust}
+            disabled={adjusting || !reason.trim() || newRating === player.rating}
+            className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {adjusting ? 'Adjusting...' : 'Adjust Rating'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Leaderboard() {
   const { player: currentPlayer } = useAuth();
   const [players, setPlayers] = useState<Player[]>([]);
@@ -12,6 +142,7 @@ export default function Leaderboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'active'>('all');
   const [selectedOpponent, setSelectedOpponent] = useState<Player | null>(null);
+  const [playerToAdjust, setPlayerToAdjust] = useState<Player | null>(null);
 
   useEffect(() => {
     fetchLeaderboard();
@@ -40,6 +171,7 @@ export default function Leaderboard() {
       const { data, error } = await supabase
         .from('players')
         .select('*')
+        .eq('is_guest', false) // Exclude guest players from leaderboard
         .order('rating', { ascending: false });
 
       if (error) throw error;
@@ -91,21 +223,8 @@ export default function Leaderboard() {
               placeholder="Search players..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="input-modern w-full pl-12"
+              className="input-modern w-full"
             />
-            <svg
-              className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
           </div>
 
           {/* Filter Tabs */}
@@ -136,6 +255,8 @@ export default function Leaderboard() {
         {/* Leaderboard Grid */}
         <div className="space-y-3 animate-slide-up">
           {filteredPlayers.map((player, index) => {
+            // Get actual rank from full leaderboard
+            const actualRank = players.findIndex(p => p.id === player.id);
             const winRate = player.games_played > 0
               ? Math.round((player.wins / player.games_played) * 100)
               : 0;
@@ -148,9 +269,9 @@ export default function Leaderboard() {
               >
                 <div className="flex items-center gap-4">
                   {/* Rank Badge */}
-                  <div className={`w-16 h-16 rounded-xl bg-gradient-to-br ${getRankColor(index)} flex items-center justify-center flex-shrink-0 shadow-lg group-hover:scale-110 transition-transform`}>
+                  <div className={`w-16 h-16 rounded-xl bg-gradient-to-br ${getRankColor(actualRank)} flex items-center justify-center flex-shrink-0 shadow-lg group-hover:scale-110 transition-transform`}>
                     <span className="text-2xl font-bold text-white">
-                      {getRankBadge(index)}
+                      {getRankBadge(actualRank)}
                     </span>
                   </div>
 
@@ -209,15 +330,31 @@ export default function Leaderboard() {
                     </div>
                   </div>
 
-                  {/* H2H Button */}
-                  {currentPlayer && currentPlayer.id !== player.id && (
-                    <button
-                      onClick={() => setSelectedOpponent(player)}
-                      className="hidden sm:block ml-4 px-4 py-2 rounded-lg bg-rally-dark/50 hover:bg-rally-coral/20 text-gray-400 hover:text-rally-coral border border-transparent hover:border-rally-coral/30 transition-all text-sm font-medium"
-                    >
-                      H2H
-                    </button>
-                  )}
+                  {/* Action Buttons */}
+                  <div className="hidden sm:flex items-center gap-2 ml-4">
+                    {/* Admin: Adjust Rating */}
+                    {currentPlayer?.is_admin && (
+                      <button
+                        onClick={() => setPlayerToAdjust(player)}
+                        className="px-4 py-2 rounded-lg bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 hover:text-orange-300 border border-transparent hover:border-orange-500/30 transition-all text-sm font-medium"
+                      >
+                        <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        Adjust
+                      </button>
+                    )}
+
+                    {/* H2H Button */}
+                    {currentPlayer && currentPlayer.id !== player.id && (
+                      <button
+                        onClick={() => setSelectedOpponent(player)}
+                        className="px-4 py-2 rounded-lg bg-rally-dark/50 hover:bg-rally-coral/20 text-gray-400 hover:text-rally-coral border border-transparent hover:border-rally-coral/30 transition-all text-sm font-medium"
+                      >
+                        H2H
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -244,6 +381,18 @@ export default function Leaderboard() {
             currentPlayer={currentPlayer}
             opponent={selectedOpponent}
             onClose={() => setSelectedOpponent(null)}
+          />
+        )}
+
+        {/* Rating Adjustment Modal */}
+        {playerToAdjust && (
+          <RatingAdjustmentModal
+            player={playerToAdjust}
+            onClose={() => setPlayerToAdjust(null)}
+            onUpdate={() => {
+              fetchLeaderboard();
+              setPlayerToAdjust(null);
+            }}
           />
         )}
       </div>

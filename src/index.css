@@ -33,6 +33,12 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+.light body {
+  background-color: rgb(249 250 251);
+  color: rgb(17 24 39);
 }
 
 #root {
@@ -167,4 +173,74 @@ body {
 
 .animate-pulse-slow {
   animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Light Mode Overrides */
+.light .bg-rally-darker {
+  background-color: rgb(249 250 251);
+}
+
+.light .bg-rally-dark {
+  background-color: rgb(243 244 246);
+}
+
+.light .bg-rally-light {
+  background-color: rgb(229 231 235);
+}
+
+.light .card-glass {
+  background-color: rgb(255 255 255 / 0.9);
+  border: 1px solid rgb(0 0 0 / 0.1);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+}
+
+.light .stat-card {
+  background-color: rgb(255 255 255 / 0.9);
+  border: 1px solid rgb(0 0 0 / 0.1);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+}
+
+.light .input-modern {
+  background-color: rgb(255 255 255);
+  border: 1px solid rgb(209 213 219);
+  color: rgb(17 24 39);
+}
+
+.light .input-modern::placeholder {
+  color: rgb(107 114 128);
+}
+
+.light .btn-secondary {
+  background-color: rgb(243 244 246);
+  color: rgb(17 24 39);
+  border: 1px solid rgb(224 124 124 / 0.3);
+}
+
+.light .btn-secondary:hover {
+  background-color: rgb(229 231 235);
+}
+
+/* Light mode text colors */
+.light .text-gray-100 {
+  color: rgb(17 24 39);
+}
+
+.light .text-gray-200 {
+  color: rgb(31 41 55);
+}
+
+.light .text-gray-300 {
+  color: rgb(55 65 81);
+}
+
+.light .text-gray-400 {
+  color: rgb(107 114 128);
+}
+
+.light .text-gray-500 {
+  color: rgb(156 163 175);
+}
+
+.light .text-gray-600 {
+  color: rgb(75 85 99);
 }
