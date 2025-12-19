@@ -11,7 +11,10 @@
       "Bash(git init:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git config:*)"
+      "Bash(git config:*)",
+      "Bash(powershell \"Get-Content ''C:\\Users\\ajoin\\Projects\\VolleyballApp\\src\\pages\\Home.tsx'' | Measure-Object -Line | Select-Object -ExpandProperty Lines\")",
+      "Bash(powershell \"Get-Content ''C:\\Users\\ajoin\\Projects\\VolleyballApp\\src\\pages\\Admin.tsx'' | Measure-Object -Line | Select-Object -ExpandProperty Lines\")",
+      "Bash(git push)"
     ],
     "deny": [],
     "ask": []

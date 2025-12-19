@@ -147,7 +147,7 @@ export default function VenuesManager() {
                       href={venue.google_maps_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-3 py-1.5 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 text-sm font-medium transition-all"
+                      className="px-3 py-1.5 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 text-sm font-medium transition-all text-center"
                     >
                       Maps
                     </a>

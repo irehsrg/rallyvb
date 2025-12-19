@@ -50,6 +50,7 @@ export default function Admin() {
       navigate('/');
       return;
     }
+    autoCloseOldSessions();
     fetchActiveSession();
     fetchTemplates();
     fetchActivityLogs();
@@ -150,6 +151,59 @@ export default function Admin() {
       setVenues(data || []);
     } catch (error) {
       console.error('Error fetching venues:', error);
+    }
+  };
+
+  const autoCloseOldSessions = async () => {
+    try {
+      // Get the cutoff time: 3 AM today
+      const now = new Date();
+      const cutoffTime = new Date(now);
+      cutoffTime.setHours(3, 0, 0, 0);
+
+      // If it's currently before 3 AM, use 3 AM yesterday as cutoff
+      if (now.getHours() < 3) {
+        cutoffTime.setDate(cutoffTime.getDate() - 1);
+      }
+
+      // Find sessions that are still active/setup but were created before the cutoff
+      const { data: oldSessions, error: fetchError } = await supabase
+        .from('sessions')
+        .select('*')
+        .in('status', ['setup', 'active'])
+        .lt('created_at', cutoffTime.toISOString());
+
+      if (fetchError) throw fetchError;
+
+      if (oldSessions && oldSessions.length > 0) {
+        console.log(`Auto-closing ${oldSessions.length} old session(s)...`);
+
+        // Close each old session
+        for (const session of oldSessions) {
+          const { error: updateError } = await supabase
+            .from('sessions')
+            .update({
+              status: 'completed',
+              completed_at: cutoffTime.toISOString(),
+            })
+            .eq('id', session.id);
+
+          if (updateError) {
+            console.error(`Error auto-closing session ${session.id}:`, updateError);
+          } else {
+            // Log the auto-close action
+            await logAdminAction('auto_close_session', 'session', session.id, {
+              reason: 'Automatically closed at 3 AM',
+              original_date: session.date,
+            });
+          }
+        }
+
+        console.log('Old sessions auto-closed successfully');
+      }
+    } catch (error) {
+      console.error('Error auto-closing old sessions:', error);
+      // Don't show alert to user, just log it
     }
   };
 
