@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Session as SessionType, SessionCheckin, Player, Game, SessionTemplate, AdminActivityLog, Venue } from '../types';
+import { Session as SessionType, SessionCheckin, Player, Game, SessionTemplate, AdminActivityLog, Venue, SetScore } from '../types';
 import { generateTeams } from '../utils/teams';
 import { calculateBalanceScore, calculateEloChange } from '../utils/elo';
 import { useNavigate } from 'react-router-dom';
@@ -9,6 +9,8 @@ import { QRCodeSVG } from 'qrcode.react';
 import TeamEditorModal from '../components/TeamEditorModal';
 import VenuesManager from '../components/VenuesManager';
 import AdminManager from '../components/AdminManager';
+import TeamManager from '../components/TeamManager';
+import TournamentManager from '../components/TournamentManager';
 import { getAdminPermissions, getAdminRoleDisplayName } from '../utils/permissions';
 
 export default function Admin() {
@@ -695,7 +697,7 @@ export default function Admin() {
     }
   };
 
-  const handleRecordResult = async (gameId: string, scoreA: number, scoreB: number) => {
+  const handleRecordResult = async (gameId: string, scoreA: number, scoreB: number, setScores?: SetScore[]) => {
     const winner = scoreA > scoreB ? 'A' : 'B';
 
     try {
@@ -753,15 +755,23 @@ export default function Admin() {
         });
       }
 
+      const gameUpdate: any = {
+        score_a: scoreA,
+        score_b: scoreB,
+        winner,
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+      };
+
+      // Add set scores and match_winner for tournament games
+      if (setScores && setScores.length > 0) {
+        gameUpdate.set_scores = setScores;
+        gameUpdate.match_winner = winner;
+      }
+
       await supabase
         .from('games')
-        .update({
-          score_a: scoreA,
-          score_b: scoreB,
-          winner,
-          status: 'completed',
-          completed_at: new Date().toISOString(),
-        })
+        .update(gameUpdate)
         .eq('id', gameId);
 
       alert('Result recorded successfully!');
@@ -1442,6 +1452,20 @@ export default function Admin() {
           </div>
         )}
 
+        {/* Team Management */}
+        {(permissions.canCreateTeams || permissions.canManageOwnTeams || permissions.canManageAllTeams) && (
+          <div className="mt-8 animate-slide-up">
+            <TeamManager />
+          </div>
+        )}
+
+        {/* Tournament Management */}
+        {(permissions.canCreateTournaments || permissions.canManageTournaments) && (
+          <div className="mt-8 animate-slide-up">
+            <TournamentManager />
+          </div>
+        )}
+
         {/* Admin Activity Log */}
         {permissions.canViewActivityLog && (
           <div className="card-glass p-8 mt-8 animate-slide-up">
@@ -1536,7 +1560,7 @@ function GameCard({
   onRecordResult,
 }: {
   game: Game;
-  onRecordResult: (gameId: string, scoreA: number, scoreB: number) => Promise<void>;
+  onRecordResult: (gameId: string, scoreA: number, scoreB: number, setScores?: SetScore[]) => Promise<void>;
 }) {
   const [teamA, setTeamA] = useState<Player[]>([]);
   const [teamB, setTeamB] = useState<Player[]>([]);
