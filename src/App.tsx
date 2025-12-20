@@ -10,6 +10,10 @@ import Profile from './pages/Profile';
 import Admin from './pages/Admin';
 import SessionHistory from './pages/SessionHistory';
 import GuestCheckin from './pages/GuestCheckin';
+import Teams from './pages/Teams';
+import TeamProfile from './pages/TeamProfile';
+import Tournaments from './pages/Tournaments';
+import TournamentView from './pages/TournamentView';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -91,6 +95,42 @@ function AppRoutes() {
         element={
           <Layout>
             <SessionHistory />
+          </Layout>
+        }
+      />
+
+      <Route
+        path="/teams"
+        element={
+          <Layout>
+            <Teams />
+          </Layout>
+        }
+      />
+
+      <Route
+        path="/teams/:teamId"
+        element={
+          <Layout>
+            <TeamProfile />
+          </Layout>
+        }
+      />
+
+      <Route
+        path="/tournaments"
+        element={
+          <Layout>
+            <Tournaments />
+          </Layout>
+        }
+      />
+
+      <Route
+        path="/tournaments/:tournamentId"
+        element={
+          <Layout>
+            <TournamentView />
           </Layout>
         }
       />
