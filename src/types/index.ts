@@ -2,7 +2,7 @@
 
 export type PlayerPosition = 'setter' | 'outside' | 'middle' | 'opposite' | 'libero' | 'any';
 export type SkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'expert';
-export type AdminRole = 'super_admin' | 'location_admin' | 'scorekeeper';
+export type AdminRole = 'super_admin' | 'location_admin' | 'scorekeeper' | 'team_manager';
 
 export interface Player {
   id: string;
@@ -224,4 +224,108 @@ export interface SessionGroupRequest {
   created_at: string;
   group?: PlayerGroup; // Joined data
   members?: PlayerGroupMember[]; // Joined data
+}
+
+// ============================================================================
+// TEAMS & TOURNAMENTS TYPES
+// ============================================================================
+
+export type TournamentFormat = 'single_elimination' | 'double_elimination' | 'round_robin';
+export type TournamentStatus = 'setup' | 'active' | 'completed' | 'cancelled';
+export type TeamMemberRole = 'manager' | 'member';
+export type TournamentTeamStatus = 'active' | 'eliminated' | 'champion' | 'runner_up';
+export type MatchRound = 'round_of_32' | 'round_of_16' | 'quarterfinals' | 'semifinals' | 'finals' | 'third_place' | string;
+
+export interface Team {
+  id: string;
+  name: string;
+  description?: string;
+  logo_url?: string;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+  is_active: boolean;
+  wins: number;
+  losses: number;
+  tournaments_played: number;
+  // Joined data
+  members?: TeamMember[];
+  managers?: Player[];
+}
+
+export interface TeamMember {
+  id: string;
+  team_id: string;
+  player_id: string;
+  role: TeamMemberRole;
+  joined_at: string;
+  is_active: boolean;
+  // Joined data
+  player?: Player;
+  team?: Team;
+}
+
+export interface Tournament {
+  id: string;
+  name: string;
+  description?: string;
+  format: TournamentFormat;
+  best_of: 1 | 3 | 5 | 7;
+  status: TournamentStatus;
+  start_date: string;
+  end_date?: string;
+  venue_id?: string;
+  created_by?: string;
+  created_at: string;
+  completed_at?: string;
+  max_teams?: number;
+  points_to_win: number;
+  deciding_set_points: number;
+  min_point_difference: number;
+  // Joined data
+  venue?: Venue;
+  teams?: TournamentTeam[];
+}
+
+export interface TournamentTeam {
+  id: string;
+  tournament_id: string;
+  team_id: string;
+  seed?: number;
+  status: TournamentTeamStatus;
+  wins: number;
+  losses: number;
+  created_at: string;
+  // Joined data
+  team?: Team;
+  tournament?: Tournament;
+}
+
+export interface SetScore {
+  team_a: number;
+  team_b: number;
+}
+
+// Extended Game interface for tournament support
+export interface TournamentGame extends Game {
+  tournament_id: string;
+  match_round?: MatchRound;
+  set_number: number;
+  set_scores?: SetScore[];
+  match_winner?: 'A' | 'B';
+  team_a_id?: string;
+  team_b_id?: string;
+  // Joined tournament data
+  team_a_entity?: Team;
+  team_b_entity?: Team;
+}
+
+export interface TeamStatistics {
+  team_id: string;
+  team_name: string;
+  active_members: number;
+  tournaments_entered: number;
+  total_match_wins: number;
+  total_matches_played: number;
+  win_percentage: number;
 }

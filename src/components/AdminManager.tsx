@@ -94,6 +94,12 @@ export default function AdminManager() {
             </span>
             <span className="text-xs text-gray-400">{getAdminRoleDescription('scorekeeper')}</span>
           </div>
+          <div className="flex items-start gap-2">
+            <span className="px-2 py-0.5 text-xs bg-yellow-500/20 text-yellow-400 rounded border border-yellow-500/30 font-medium whitespace-nowrap">
+              Team Manager
+            </span>
+            <span className="text-xs text-gray-400">{getAdminRoleDescription('team_manager')}</span>
+          </div>
         </div>
       </div>
 
@@ -115,6 +121,8 @@ export default function AdminManager() {
                           ? 'bg-purple-500/20 text-purple-400 border-purple-500/30'
                           : player.admin_role === 'location_admin'
                           ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                          : player.admin_role === 'team_manager'
+                          ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
                           : 'bg-green-500/20 text-green-400 border-green-500/30'
                       }`}
                     >
@@ -181,6 +189,7 @@ export default function AdminManager() {
                 >
                   <option value="">No Admin Access (Regular Player)</option>
                   <option value="scorekeeper">Scorekeeper</option>
+                  <option value="team_manager">Team Manager</option>
                   <option value="location_admin">Location Admin</option>
                   <option value="super_admin">Super Admin</option>
                 </select>

@@ -805,6 +805,8 @@ export default function Admin() {
                       ? 'bg-purple-500/20 text-purple-400 border-purple-500/30'
                       : player.admin_role === 'location_admin'
                       ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                      : player.admin_role === 'team_manager'
+                      ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
                       : 'bg-green-500/20 text-green-400 border-green-500/30'
                   }`}
                 >
@@ -827,6 +829,8 @@ export default function Admin() {
                   <div className="text-xs text-blue-300/80">
                     {player.admin_role === 'location_admin'
                       ? 'You can manage active sessions, teams, and game results. Contact a Super Admin for additional permissions.'
+                      : player.admin_role === 'team_manager'
+                      ? 'You can create and manage teams, add/remove players, and register for tournaments. Contact a Super Admin for additional permissions.'
                       : 'You can manage check-ins and record game scores. Contact a Super Admin for additional permissions.'}
                   </div>
                 </div>
