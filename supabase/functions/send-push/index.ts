@@ -234,14 +234,16 @@ async function sendPushNotification(
 // ============================================================================
 
 interface PushRequest {
-  type: 'session_created' | 'session_reminder' | 'waitlist_update' | 'game_results' | 'custom'
+  type: 'session_created' | 'session_reminder' | 'waitlist_update' | 'game_results' | 'new_event' | 'event_reminder' | 'comment_reply' | 'custom'
   sessionId?: string
   playerId?: string
+  eventId?: string
   title?: string
   body?: string
   url?: string
   sessionDetails?: { date: string; time: string; location: string }
   gameDetails?: { result: 'win' | 'loss'; ratingChange: number; newRating: number }
+  eventDetails?: { title: string; date?: string; time?: string; host?: string; location?: string; commenterName?: string }
 }
 
 interface DBPushSubscription {
@@ -293,6 +295,30 @@ function formatNotification(request: PushRequest): { title: string; body: string
         }
       }
       return { title: 'Game Results', body: 'Check your updated rating!', data: { type: 'game_results', url: '/profile' } }
+    case 'new_event':
+      return {
+        title: 'New Event Posted!',
+        body: request.eventDetails
+          ? `${request.eventDetails.title} - ${request.eventDetails.date} at ${request.eventDetails.time}`
+          : 'A new volleyball event is available!',
+        data: { type: 'new_event', url: request.eventId ? `/events/${request.eventId}` : '/events' }
+      }
+    case 'event_reminder':
+      return {
+        title: 'Event Starting Soon!',
+        body: request.eventDetails
+          ? `${request.eventDetails.title} at ${request.eventDetails.location} starts in 1 hour!`
+          : 'Your volleyball event starts in 1 hour!',
+        data: { type: 'event_reminder', url: request.eventId ? `/events/${request.eventId}` : '/events' }
+      }
+    case 'comment_reply':
+      return {
+        title: 'New Reply to Your Comment',
+        body: request.eventDetails
+          ? `${request.eventDetails.commenterName} replied on "${request.eventDetails.title}"`
+          : 'Someone replied to your comment!',
+        data: { type: 'comment_reply', url: request.eventId ? `/events/${request.eventId}` : '/events' }
+      }
     case 'custom':
       return {
         title: request.title || 'Rally',
@@ -341,6 +367,45 @@ serve(async (req) => {
         const { data: player } = await supabase.from('players').select('name, push_notifications_enabled, notification_preferences').eq('id', body.playerId).single()
         const prefKey = body.type === 'waitlist_update' ? 'waitlist_update' : 'game_results'
         if (player?.push_notifications_enabled && player.notification_preferences?.[prefKey]) {
+          recipients = (subs || []).map(s => ({ ...s, player_name: player.name }))
+        }
+        break
+      }
+      case 'new_event': {
+        // Use the same function as session_created - notify users with session_created preference
+        const { data, error } = await supabase.rpc('get_push_notification_recipients', { notification_type: 'session_created' })
+        if (error) throw error
+        recipients = data || []
+        break
+      }
+      case 'event_reminder': {
+        // Notify users who RSVP'd "going" to the event
+        if (!body.eventId) throw new Error('eventId required')
+        const { data: rsvps } = await supabase
+          .from('open_session_rsvps')
+          .select('player_id')
+          .eq('session_id', body.eventId)
+          .eq('status', 'going')
+
+        if (rsvps && rsvps.length > 0) {
+          const playerIds = rsvps.map(r => r.player_id)
+          const { data: subs } = await supabase
+            .from('push_subscriptions')
+            .select('*, players!inner(name, push_notifications_enabled, notification_preferences)')
+            .in('player_id', playerIds)
+
+          recipients = (subs || [])
+            .filter((s: any) => s.players?.push_notifications_enabled && s.players?.notification_preferences?.session_reminder)
+            .map((s: any) => ({ ...s, player_name: s.players?.name || 'Player' }))
+        }
+        break
+      }
+      case 'comment_reply': {
+        // Notify the specific player who is receiving the reply
+        if (!body.playerId) throw new Error('playerId required')
+        const { data: subs } = await supabase.from('push_subscriptions').select('*').eq('player_id', body.playerId)
+        const { data: player } = await supabase.from('players').select('name, push_notifications_enabled').eq('id', body.playerId).single()
+        if (player?.push_notifications_enabled) {
           recipients = (subs || []).map(s => ({ ...s, player_name: player.name }))
         }
         break

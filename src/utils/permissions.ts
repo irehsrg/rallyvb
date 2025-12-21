@@ -32,6 +32,11 @@ export interface AdminPermissions {
   canCreateTournaments: boolean;
   canManageTournaments: boolean;
   canRegisterTeamsForTournaments: boolean;
+
+  // Host / Open Sessions (Event Feed)
+  canCreateOpenSessions: boolean;
+  canManageOwnOpenSessions: boolean;
+  canManageAllOpenSessions: boolean;
 }
 
 export function getAdminPermissions(player: Player | null): AdminPermissions {
@@ -57,6 +62,9 @@ export function getAdminPermissions(player: Player | null): AdminPermissions {
       canCreateTournaments: false,
       canManageTournaments: false,
       canRegisterTeamsForTournaments: false,
+      canCreateOpenSessions: false,
+      canManageOwnOpenSessions: false,
+      canManageAllOpenSessions: false,
     };
   }
 
@@ -86,6 +94,9 @@ export function getAdminPermissions(player: Player | null): AdminPermissions {
         canCreateTournaments: true,
         canManageTournaments: true,
         canRegisterTeamsForTournaments: true,
+        canCreateOpenSessions: true,
+        canManageOwnOpenSessions: true,
+        canManageAllOpenSessions: true,
       };
 
     case 'location_admin':
@@ -111,6 +122,9 @@ export function getAdminPermissions(player: Player | null): AdminPermissions {
         canCreateTournaments: false,
         canManageTournaments: false,
         canRegisterTeamsForTournaments: false,
+        canCreateOpenSessions: false,
+        canManageOwnOpenSessions: false,
+        canManageAllOpenSessions: false,
       };
 
     case 'scorekeeper':
@@ -136,6 +150,9 @@ export function getAdminPermissions(player: Player | null): AdminPermissions {
         canCreateTournaments: false,
         canManageTournaments: false,
         canRegisterTeamsForTournaments: false,
+        canCreateOpenSessions: false,
+        canManageOwnOpenSessions: false,
+        canManageAllOpenSessions: false,
       };
 
     case 'team_manager':
@@ -161,6 +178,37 @@ export function getAdminPermissions(player: Player | null): AdminPermissions {
         canCreateTournaments: false,
         canManageTournaments: false,
         canRegisterTeamsForTournaments: true,
+        canCreateOpenSessions: false,
+        canManageOwnOpenSessions: false,
+        canManageAllOpenSessions: false,
+      };
+
+    case 'host':
+      // Can create and manage open sessions (events) for the public feed
+      return {
+        canCreateSession: false,
+        canCancelSession: false,
+        canManageCheckins: false,
+        canGenerateTeams: false,
+        canRecordScores: false,
+        canEditTeams: false,
+        canDeleteGames: false,
+        canManageVenues: false,
+        canAdjustRatings: false,
+        canManageAdmins: false,
+        canBanPlayers: false,
+        canCreateTemplates: false,
+        canCreateRecurringSessions: false,
+        canViewActivityLog: false,
+        canCreateTeams: false,
+        canManageOwnTeams: false,
+        canManageAllTeams: false,
+        canCreateTournaments: false,
+        canManageTournaments: false,
+        canRegisterTeamsForTournaments: false,
+        canCreateOpenSessions: true,
+        canManageOwnOpenSessions: true,
+        canManageAllOpenSessions: false,
       };
 
     default:
@@ -179,6 +227,8 @@ export function getAdminRoleDisplayName(role?: AdminRole): string {
       return 'Scorekeeper';
     case 'team_manager':
       return 'Team Manager';
+    case 'host':
+      return 'Host';
     default:
       return 'Admin';
   }
@@ -194,6 +244,8 @@ export function getAdminRoleDescription(role: AdminRole): string {
       return 'Can manage check-ins and record game scores';
     case 'team_manager':
       return 'Can create and manage teams, add/remove players, and register for tournaments';
+    case 'host':
+      return 'Can create and manage public events/open sessions for the community feed';
     default:
       return '';
   }

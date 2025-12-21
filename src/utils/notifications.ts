@@ -93,3 +93,90 @@ export async function notifySessionReminder(
     },
   });
 }
+
+// ============================================================================
+// OPEN SESSION (EVENT) NOTIFICATIONS
+// ============================================================================
+
+// Notify all subscribed users about a new public event
+export async function notifyNewEvent(event: {
+  id: string;
+  title: string;
+  event_date: string;
+  start_time: string;
+  host_name: string;
+  location: string;
+}): Promise<void> {
+  const date = new Date(event.event_date + 'T00:00:00');
+  const dateStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+  // Format time from HH:MM:SS to readable format
+  const [hours, minutes] = event.start_time.split(':');
+  const hour = parseInt(hours);
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const hour12 = hour % 12 || 12;
+  const timeStr = `${hour12}:${minutes} ${ampm}`;
+
+  await sendPush({
+    type: 'new_event',
+    eventId: event.id,
+    eventDetails: {
+      title: event.title,
+      date: dateStr,
+      time: timeStr,
+      host: event.host_name,
+      location: event.location,
+    },
+  });
+}
+
+// Notify a user when someone replies to their comment
+export async function notifyCommentReply(
+  recipientId: string,
+  event: {
+    id: string;
+    title: string;
+  },
+  commenterName: string
+): Promise<void> {
+  await sendPush({
+    type: 'comment_reply',
+    playerId: recipientId,
+    eventId: event.id,
+    eventDetails: {
+      title: event.title,
+      commenterName,
+    },
+  });
+}
+
+// Notify RSVPed users about an upcoming event (1 hour before)
+export async function notifyEventReminder(
+  eventId: string,
+  event: {
+    title: string;
+    event_date: string;
+    start_time: string;
+    location: string;
+  }
+): Promise<void> {
+  const date = new Date(event.event_date + 'T00:00:00');
+  const dateStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+  const [hours, minutes] = event.start_time.split(':');
+  const hour = parseInt(hours);
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const hour12 = hour % 12 || 12;
+  const timeStr = `${hour12}:${minutes} ${ampm}`;
+
+  await sendPush({
+    type: 'event_reminder',
+    eventId,
+    eventDetails: {
+      title: event.title,
+      date: dateStr,
+      time: timeStr,
+      location: event.location,
+    },
+  });
+}

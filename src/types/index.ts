@@ -2,7 +2,7 @@
 
 export type PlayerPosition = 'setter' | 'outside' | 'middle' | 'opposite' | 'libero' | 'any';
 export type SkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'expert';
-export type AdminRole = 'super_admin' | 'location_admin' | 'scorekeeper' | 'team_manager';
+export type AdminRole = 'super_admin' | 'location_admin' | 'scorekeeper' | 'team_manager' | 'host';
 
 export interface NotificationPreferences {
   session_created: boolean;
@@ -349,4 +349,124 @@ export interface TeamStatistics {
   total_match_wins: number;
   total_matches_played: number;
   win_percentage: number;
+}
+
+// ============================================================================
+// HOST ROLE & OPEN SESSIONS (EVENT FEED) TYPES
+// ============================================================================
+
+export type EventSkillLevel = 'all_levels' | 'beginner' | 'intermediate' | 'advanced' | 'expert';
+export type OpenSessionStatus = 'draft' | 'upcoming' | 'active' | 'completed' | 'cancelled';
+export type RSVPStatus = 'going' | 'maybe' | 'not_going';
+export type TournamentRegistrationMode = 'team_only' | 'individuals_allowed' | 'individuals_only';
+
+export interface OpenSession {
+  id: string;
+  host_id: string;
+  title: string;
+  description?: string;
+  // Location
+  venue_id?: string;
+  custom_location?: string;
+  custom_address?: string;
+  google_maps_url?: string;
+  // Timing
+  event_date: string;
+  start_time: string;
+  end_time?: string;
+  // Capacity & Requirements
+  max_players?: number;
+  min_players: number;
+  skill_level: EventSkillLevel;
+  // Settings
+  is_public: boolean;
+  allow_comments: boolean;
+  rsvp_deadline?: string;
+  // Status
+  status: OpenSessionStatus;
+  cancelled_at?: string;
+  cancellation_reason?: string;
+  // Metadata
+  created_at: string;
+  updated_at: string;
+  // Joined data
+  host?: Player;
+  venue?: Venue;
+  rsvps?: OpenSessionRSVP[];
+  comments?: OpenSessionComment[];
+  rsvp_counts?: {
+    going: number;
+    maybe: number;
+    not_going: number;
+  };
+}
+
+export interface OpenSessionRSVP {
+  id: string;
+  session_id: string;
+  player_id: string;
+  status: RSVPStatus;
+  created_at: string;
+  updated_at: string;
+  // Joined data
+  player?: Player;
+}
+
+export interface OpenSessionComment {
+  id: string;
+  session_id: string;
+  player_id: string;
+  parent_id?: string;
+  content: string;
+  is_edited: boolean;
+  created_at: string;
+  updated_at: string;
+  // Joined data
+  player?: Player;
+  replies?: OpenSessionComment[];
+}
+
+// ============================================================================
+// TOURNAMENT REGISTRATION TYPES
+// ============================================================================
+
+export interface TournamentIndividualRegistration {
+  id: string;
+  tournament_id: string;
+  player_id: string;
+  status: 'pending' | 'approved' | 'rejected' | 'assigned_to_team';
+  assigned_team_id?: string;
+  notes?: string;
+  created_at: string;
+  // Joined data
+  player?: Player;
+  assigned_team?: Team;
+  tournament?: Tournament;
+}
+
+export interface TournamentTeamRegistration {
+  id: string;
+  tournament_id: string;
+  team_id: string;
+  registered_by: string;
+  status: 'pending' | 'approved' | 'rejected';
+  roster_snapshot?: TeamMember[];
+  notes?: string;
+  created_at: string;
+  reviewed_at?: string;
+  reviewed_by?: string;
+  // Joined data
+  team?: Team;
+  tournament?: Tournament;
+  registrant?: Player;
+  reviewer?: Player;
+}
+
+// Extended Tournament fields for registration
+export interface TournamentRegistrationSettings {
+  registration_mode: TournamentRegistrationMode;
+  allow_self_registration: boolean;
+  registration_deadline?: string;
+  min_team_size: number;
+  max_team_size: number;
 }

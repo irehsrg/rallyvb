@@ -15,6 +15,8 @@ import TeamProfile from './pages/TeamProfile';
 import Tournaments from './pages/Tournaments';
 import TournamentView from './pages/TournamentView';
 import PlayerProfile from './pages/PlayerProfile';
+import EventFeed from './pages/EventFeed';
+import EventDetail from './pages/EventDetail';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -141,6 +143,24 @@ function AppRoutes() {
         element={
           <Layout>
             <PlayerProfile />
+          </Layout>
+        }
+      />
+
+      <Route
+        path="/events"
+        element={
+          <Layout>
+            <EventFeed />
+          </Layout>
+        }
+      />
+
+      <Route
+        path="/events/:eventId"
+        element={
+          <Layout>
+            <EventDetail />
           </Layout>
         }
       />
