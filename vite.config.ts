@@ -7,14 +7,18 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       registerType: 'autoUpdate',
+      injectRegister: 'auto',
       includeAssets: ['icon-192.png', 'icon-512.png'],
       manifest: {
-        name: 'Volleyball Pickup Manager',
-        short_name: 'VB Pickup',
+        name: 'Rally - Volleyball Pickup Manager',
+        short_name: 'Rally',
         description: 'Manage volleyball pickup sessions, track ratings, and organize games',
-        theme_color: '#3b82f6',
-        background_color: '#ffffff',
+        theme_color: '#E07C7C',
+        background_color: '#0f172a',
         display: 'standalone',
         icons: [
           {
@@ -31,28 +35,12 @@ export default defineConfig({
           }
         ]
       },
-      workbox: {
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
-        runtimeCaching: [
-          {
-            urlPattern: ({ url }) => url.origin === 'https://fonts.googleapis.com',
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'google-fonts-stylesheets',
-            },
-          },
-          {
-            urlPattern: ({ url }) => url.origin === 'https://fonts.gstatic.com',
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-webfonts',
-              expiration: {
-                maxEntries: 30,
-                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
-              },
-            },
-          },
-        ],
+      },
+      devOptions: {
+        enabled: true,
+        type: 'module',
       },
     }),
   ],

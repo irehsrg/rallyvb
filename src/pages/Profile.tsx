@@ -26,6 +26,9 @@ export default function Profile() {
     bio: player?.bio || '',
     profile_photo_url: player?.profile_photo_url || '',
   });
+  const [pushEnabled, setPushEnabled] = useState(player?.push_notifications_enabled || false);
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [favorites, setFavorites] = useState<Player[]>([]);
   const [avoidList, setAvoidList] = useState<Player[]>([]);
@@ -39,8 +42,14 @@ export default function Profile() {
   useEffect(() => {
     if (player) {
       Promise.all([fetchRatingHistory(), fetchGameHistory(), fetchAchievements(), fetchRelationships(), fetchEndorsements()]);
+      setPushEnabled(player.push_notifications_enabled || false);
     }
   }, [player]);
+
+  useEffect(() => {
+    // Check if push notifications are supported
+    setPushSupported('serviceWorker' in navigator && 'PushManager' in window);
+  }, []);
 
   useEffect(() => {
     if (searchQuery.length >= 2) {
@@ -314,6 +323,91 @@ export default function Profile() {
       alert('Failed to update profile. Please try again.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const togglePushNotifications = async () => {
+    if (!player || !pushSupported) return;
+
+    setPushLoading(true);
+    try {
+      if (!pushEnabled) {
+        // Request permission and subscribe
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+          alert('Please allow notifications in your browser settings to receive updates.');
+          setPushLoading(false);
+          return;
+        }
+
+        // Get service worker registration
+        const registration = await navigator.serviceWorker.ready;
+
+        // Subscribe to push notifications
+        const subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: import.meta.env.VITE_VAPID_PUBLIC_KEY,
+        });
+
+        const subscriptionJson = subscription.toJSON();
+
+        // Save subscription to database
+        const { error: subError } = await supabase
+          .from('push_subscriptions')
+          .upsert({
+            player_id: player.id,
+            endpoint: subscriptionJson.endpoint,
+            p256dh_key: subscriptionJson.keys?.p256dh,
+            auth_key: subscriptionJson.keys?.auth,
+            user_agent: navigator.userAgent,
+          }, {
+            onConflict: 'player_id,endpoint',
+          });
+
+        if (subError) throw subError;
+
+        // Update player preference
+        const { error } = await supabase
+          .from('players')
+          .update({ push_notifications_enabled: true })
+          .eq('id', player.id);
+
+        if (error) throw error;
+
+        setPushEnabled(true);
+        await refreshPlayer();
+      } else {
+        // Unsubscribe
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+
+        if (subscription) {
+          await subscription.unsubscribe();
+
+          // Remove from database
+          await supabase
+            .from('push_subscriptions')
+            .delete()
+            .eq('player_id', player.id)
+            .eq('endpoint', subscription.endpoint);
+        }
+
+        // Update player preference
+        const { error } = await supabase
+          .from('players')
+          .update({ push_notifications_enabled: false })
+          .eq('id', player.id);
+
+        if (error) throw error;
+
+        setPushEnabled(false);
+        await refreshPlayer();
+      }
+    } catch (error) {
+      console.error('Error toggling push notifications:', error);
+      alert('Failed to update notification settings. Please try again.');
+    } finally {
+      setPushLoading(false);
     }
   };
 
@@ -973,6 +1067,60 @@ export default function Profile() {
             </div>
           )}
         </div>
+
+        {/* Push Notifications */}
+        <div className="card-glass p-6 animate-slide-up" style={{ animationDelay: '0.35s' }}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-rally-coral/20 flex items-center justify-center">
+                <svg className="w-6 h-6 text-rally-coral" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-100">Push Notifications</h3>
+                <p className="text-sm text-gray-400">
+                  {pushSupported
+                    ? 'Get notified about new sessions, reminders, and updates'
+                    : 'Not supported in this browser'}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={togglePushNotifications}
+              disabled={!pushSupported || pushLoading}
+              className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-rally-coral focus:ring-offset-2 focus:ring-offset-rally-darker ${
+                pushEnabled ? 'bg-rally-coral' : 'bg-gray-600'
+              } ${(!pushSupported || pushLoading) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                  pushEnabled ? 'translate-x-8' : 'translate-x-1'
+                }`}
+              />
+              {pushLoading && (
+                <span className="absolute inset-0 flex items-center justify-center">
+                  <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                </span>
+              )}
+            </button>
+          </div>
+
+          {pushEnabled && (
+            <div className="mt-4 pt-4 border-t border-gray-700">
+              <p className="text-sm text-green-400 flex items-center gap-2">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                Notifications enabled! You'll receive alerts for new sessions, reminders, and waitlist updates.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Edit Profile Modal */}
@@ -1075,34 +1223,34 @@ export default function Profile() {
                   </div>
                 )}
               </div>
-            </div>
 
-            {/* Action Buttons */}
-            <div className="flex gap-3 mt-8">
-              <button
-                onClick={() => setShowEditModal(false)}
-                className="btn-secondary flex-1"
-                disabled={saving}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveProfile}
-                className="btn-primary flex-1"
-                disabled={saving}
-              >
-                {saving ? (
-                  <span className="flex items-center justify-center">
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Saving...
-                  </span>
-                ) : (
-                  'Save Changes'
-                )}
-              </button>
+              {/* Action Buttons */}
+              <div className="flex gap-3 mt-8">
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="btn-secondary flex-1"
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveProfile}
+                  className="btn-primary flex-1"
+                  disabled={saving}
+                >
+                  {saving ? (
+                    <span className="flex items-center justify-center">
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Saving...
+                    </span>
+                  ) : (
+                    'Save Changes'
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

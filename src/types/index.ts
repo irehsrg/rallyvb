@@ -4,6 +4,24 @@ export type PlayerPosition = 'setter' | 'outside' | 'middle' | 'opposite' | 'lib
 export type SkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'expert';
 export type AdminRole = 'super_admin' | 'location_admin' | 'scorekeeper' | 'team_manager';
 
+export interface NotificationPreferences {
+  session_created: boolean;
+  session_reminder: boolean;
+  waitlist_update: boolean;
+  game_results: boolean;
+}
+
+export interface PushSubscription {
+  id: string;
+  player_id: string;
+  endpoint: string;
+  p256dh_key: string;
+  auth_key: string;
+  user_agent?: string;
+  created_at: string;
+  last_used_at: string;
+}
+
 export interface Player {
   id: string;
   name: string;
@@ -27,6 +45,9 @@ export interface Player {
   ban_reason?: string;
   ban_until?: string | null;
   is_guest?: boolean; // TRUE for temporary guest players
+  // Push notification fields
+  push_notifications_enabled?: boolean;
+  notification_preferences?: NotificationPreferences;
 }
 
 export interface Venue {

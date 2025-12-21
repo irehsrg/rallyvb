@@ -12,6 +12,7 @@ import AdminManager from '../components/AdminManager';
 import TeamManager from '../components/TeamManager';
 import TournamentManager from '../components/TournamentManager';
 import { getAdminPermissions, getAdminRoleDisplayName } from '../utils/permissions';
+import { notifySessionCreated, notifyGameResult } from '../utils/notifications';
 
 export default function Admin() {
   const { player } = useAuth();
@@ -308,6 +309,13 @@ export default function Admin() {
         court_count: courtCount,
         max_players: maxPlayers,
         venue_id: selectedVenueId,
+      });
+
+      // Send push notification to all subscribed users
+      notifySessionCreated({
+        date: sessionDate,
+        location_name: locationName,
+        venue: venues.find(v => v.id === selectedVenueId),
       });
 
       alert(`Session created successfully for ${new Date(sessionDate).toLocaleDateString()}!`);
@@ -753,6 +761,9 @@ export default function Admin() {
           new_rating: newRating,
           change: change,
         });
+
+        // Send push notification to player about their game result
+        notifyGameResult(gp.player_id, won ? 'win' : 'loss', change, newRating);
       }
 
       const gameUpdate: any = {

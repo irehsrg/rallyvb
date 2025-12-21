@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
 import { useState } from 'react';
+import HelpModal from './HelpModal';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, player, signOut } = useAuth();
@@ -10,6 +11,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
   const [feedbackType, setFeedbackType] = useState<'bug' | 'feature' | 'issue' | 'other'>('other');
   const [feedbackTitle, setFeedbackTitle] = useState('');
   const [feedbackDescription, setFeedbackDescription] = useState('');
@@ -114,6 +116,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </Link>
 
             <div className="flex items-center gap-2">
+              {/* Help Button */}
+              <button
+                onClick={() => setShowHelpModal(true)}
+                className="p-2 text-gray-400 hover:text-gray-100 hover:bg-rally-light/50 rounded-xl transition-all duration-300"
+                title="Help & Tips"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </button>
+
               {/* Feedback Button */}
               <button
                 onClick={() => setShowFeedbackModal(true)}
@@ -454,6 +467,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       )}
+
+      {/* Help Modal */}
+      <HelpModal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)} />
     </div>
   );
 }
