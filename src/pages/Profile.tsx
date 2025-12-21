@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { RatingHistory, Game, Achievement, Player, Endorsement } from '../types';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { compressImage, validateImageFile } from '../utils/imageUtils';
 
 interface GameWithDetails extends Game {
   session?: {
@@ -38,6 +39,9 @@ export default function Profile() {
   const [searchResults, setSearchResults] = useState<Player[]>([]);
   const [receivedEndorsements, setReceivedEndorsements] = useState<(Endorsement & { from_player?: Player })[]>([]);
   const [showEndorseModal, setShowEndorseModal] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (player) {
@@ -318,11 +322,66 @@ export default function Profile() {
       // Refresh player data
       await refreshPlayer();
       setShowEditModal(false);
+      setPhotoPreview(null);
     } catch (error) {
       console.error('Error updating profile:', error);
       alert('Failed to update profile. Please try again.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !player) return;
+
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      alert(validation.error);
+      return;
+    }
+
+    setUploadingPhoto(true);
+    try {
+      // Compress the image
+      const compressedBlob = await compressImage(file, 400, 400, 0.85);
+
+      // Create a preview
+      const previewUrl = URL.createObjectURL(compressedBlob);
+      setPhotoPreview(previewUrl);
+
+      // Upload to Supabase Storage
+      const fileName = `${player.id}-${Date.now()}.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from('profile-photos')
+        .upload(fileName, compressedBlob, {
+          contentType: 'image/jpeg',
+          upsert: true,
+        });
+
+      if (uploadError) throw uploadError;
+
+      // Get the public URL
+      const { data: urlData } = supabase.storage
+        .from('profile-photos')
+        .getPublicUrl(fileName);
+
+      // Update the form with the new URL
+      setEditForm({ ...editForm, profile_photo_url: urlData.publicUrl });
+    } catch (error) {
+      console.error('Error uploading photo:', error);
+      alert('Failed to upload photo. Please try again.');
+      setPhotoPreview(null);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const removePhoto = () => {
+    setEditForm({ ...editForm, profile_photo_url: '' });
+    setPhotoPreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -1194,34 +1253,71 @@ export default function Profile() {
                 </p>
               </div>
 
-              {/* Profile Photo URL */}
+              {/* Profile Photo */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Profile Photo URL
+                  Profile Photo
                 </label>
-                <input
-                  type="url"
-                  value={editForm.profile_photo_url}
-                  onChange={(e) => setEditForm({ ...editForm, profile_photo_url: e.target.value })}
-                  className="input-modern w-full"
-                  placeholder="https://example.com/photo.jpg"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Paste a URL to an image (optional)
-                </p>
-                {editForm.profile_photo_url && (
-                  <div className="mt-3">
-                    <p className="text-xs text-gray-400 mb-2">Preview:</p>
-                    <img
-                      src={editForm.profile_photo_url}
-                      alt="Preview"
-                      className="w-24 h-24 rounded-2xl object-cover border-2 border-rally-coral"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                      }}
-                    />
+
+                {/* Current/Preview Photo */}
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="relative">
+                    {(photoPreview || editForm.profile_photo_url) ? (
+                      <img
+                        src={photoPreview || editForm.profile_photo_url}
+                        alt="Profile"
+                        className="w-24 h-24 rounded-2xl object-cover border-2 border-rally-coral"
+                      />
+                    ) : (
+                      <div className="w-24 h-24 rounded-2xl bg-rally-dark border-2 border-dashed border-gray-600 flex items-center justify-center">
+                        <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                      </div>
+                    )}
+                    {uploadingPhoto && (
+                      <div className="absolute inset-0 bg-black/50 rounded-2xl flex items-center justify-center">
+                        <svg className="animate-spin h-8 w-8 text-white" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      </div>
+                    )}
                   </div>
-                )}
+
+                  <div className="flex flex-col gap-2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePhotoUpload}
+                      className="hidden"
+                      id="photo-upload"
+                    />
+                    <label
+                      htmlFor="photo-upload"
+                      className="btn-secondary text-sm cursor-pointer inline-flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      {uploadingPhoto ? 'Uploading...' : 'Upload Photo'}
+                    </label>
+                    {(photoPreview || editForm.profile_photo_url) && (
+                      <button
+                        type="button"
+                        onClick={removePhoto}
+                        className="text-sm text-red-400 hover:text-red-300 transition-colors"
+                      >
+                        Remove Photo
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <p className="text-xs text-gray-500">
+                  Upload a JPG, PNG, or WebP image. Large photos will be automatically resized.
+                </p>
               </div>
 
               {/* Action Buttons */}
