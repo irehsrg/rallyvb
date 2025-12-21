@@ -1128,7 +1128,7 @@ export default function Profile() {
         </div>
 
         {/* Push Notifications */}
-        <div className="card-glass p-6 animate-slide-up" style={{ animationDelay: '0.35s' }}>
+        <div className="card-glass p-6 mt-8 animate-slide-up" style={{ animationDelay: '0.35s' }}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-xl bg-rally-coral/20 flex items-center justify-center">
@@ -1149,13 +1149,13 @@ export default function Profile() {
             <button
               onClick={togglePushNotifications}
               disabled={!pushSupported || pushLoading}
-              className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-rally-coral focus:ring-offset-2 focus:ring-offset-rally-darker ${
+              className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-rally-coral focus:ring-offset-2 focus:ring-offset-rally-darker ${
                 pushEnabled ? 'bg-rally-coral' : 'bg-gray-600'
               } ${(!pushSupported || pushLoading) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
             >
               <span
                 className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
-                  pushEnabled ? 'translate-x-8' : 'translate-x-1'
+                  pushEnabled ? 'translate-x-6' : 'translate-x-1'
                 }`}
               />
               {pushLoading && (
