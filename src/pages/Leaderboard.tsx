@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Player } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -278,9 +279,12 @@ export default function Leaderboard() {
                   {/* Player Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-lg font-bold text-gray-100 truncate">
+                      <Link
+                        to={`/player/${player.id}`}
+                        className="text-lg font-bold text-gray-100 truncate hover:text-rally-coral transition-colors"
+                      >
                         {player.name}
-                      </h3>
+                      </Link>
                       {player.is_admin && (
                         <span className="px-2 py-0.5 text-xs bg-rally-coral/20 text-rally-coral rounded-lg border border-rally-coral/30 font-medium">
                           ADMIN

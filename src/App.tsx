@@ -14,6 +14,7 @@ import Teams from './pages/Teams';
 import TeamProfile from './pages/TeamProfile';
 import Tournaments from './pages/Tournaments';
 import TournamentView from './pages/TournamentView';
+import PlayerProfile from './pages/PlayerProfile';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -131,6 +132,15 @@ function AppRoutes() {
         element={
           <Layout>
             <TournamentView />
+          </Layout>
+        }
+      />
+
+      <Route
+        path="/player/:playerId"
+        element={
+          <Layout>
+            <PlayerProfile />
           </Layout>
         }
       />
