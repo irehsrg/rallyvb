@@ -1,19 +1,5 @@
-import { supabase } from '../lib/supabase';
-
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-interface SessionDetails {
-  date: string;
-  time: string;
-  location: string;
-}
-
-interface GameDetails {
-  result: 'win' | 'loss';
-  ratingChange: number;
-  newRating: number;
-}
 
 // Send push notification via Edge Function
 async function sendPush(payload: object): Promise<boolean> {
