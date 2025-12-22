@@ -463,21 +463,21 @@ export default function Home() {
               </div>
             )}
 
-            <div className="flex items-center justify-between bg-rally-dark/50 rounded-xl p-4 mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-rally-dark/50 rounded-xl p-4 mb-6">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-gradient-rally flex items-center justify-center">
-                  <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-rally flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 sm:w-6 sm:h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
                     <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
                   </svg>
                 </div>
                 <div>
-                  <div className="text-2xl font-bold text-gray-100">
+                  <div className="text-xl sm:text-2xl font-bold text-gray-100">
                     {checkinCount}
                     {currentSession.max_players && (
-                      <span className="text-lg text-gray-400"> / {currentSession.max_players}</span>
+                      <span className="text-base sm:text-lg text-gray-400"> / {currentSession.max_players}</span>
                     )}
                   </div>
-                  <div className="text-sm text-gray-400">
+                  <div className="text-xs sm:text-sm text-gray-400">
                     Players Checked In
                     {currentSession.max_players && checkinCount >= currentSession.max_players && (
                       <span className="ml-2 text-red-400 font-semibold">(FULL)</span>
@@ -487,22 +487,22 @@ export default function Home() {
               </div>
 
               {player && (
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2 justify-end">
                   <button
                     onClick={() => setShowGroupsModal(true)}
-                    className="px-4 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2 bg-rally-dark/50 text-gray-300 border-2 border-white/10 hover:border-rally-coral/30 hover:bg-rally-dark"
+                    className="px-3 sm:px-4 py-2 sm:py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2 bg-rally-dark/50 text-gray-300 border-2 border-white/10 hover:border-rally-coral/30 hover:bg-rally-dark text-sm sm:text-base"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
-                    Groups
+                    <span className="hidden sm:inline">Groups</span>
                   </button>
                   {checkedIn ? (
                     <button
                       onClick={handleCheckin}
-                      className="px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2 bg-red-500/20 text-red-400 border-2 border-red-500/50 hover:bg-red-500/30"
+                      className="px-3 sm:px-6 py-2 sm:py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2 bg-red-500/20 text-red-400 border-2 border-red-500/50 hover:bg-red-500/30 text-sm sm:text-base"
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
                       Check Out
@@ -512,41 +512,45 @@ export default function Home() {
                       {deadlinePassed ? (
                         <button
                           disabled
-                          className="px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2 bg-gray-500/20 text-gray-500 border-2 border-gray-500/50 cursor-not-allowed"
+                          className="px-3 sm:px-6 py-2 sm:py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2 bg-gray-500/20 text-gray-500 border-2 border-gray-500/50 cursor-not-allowed text-sm sm:text-base"
                         >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          Deadline Passed
+                          <span className="hidden sm:inline">Deadline Passed</span>
+                          <span className="sm:hidden">Closed</span>
                         </button>
                       ) : currentSession.max_players && checkinCount >= currentSession.max_players ? (
                         onWaitlist ? (
                           <button
                             onClick={handleLeaveWaitlist}
-                            className="px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2 bg-orange-500/20 text-orange-400 border-2 border-orange-500/50 hover:bg-orange-500/30"
+                            className="px-3 sm:px-6 py-2 sm:py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2 bg-orange-500/20 text-orange-400 border-2 border-orange-500/50 hover:bg-orange-500/30 text-sm sm:text-base"
                           >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                             </svg>
-                            Leave Waitlist
+                            <span className="hidden sm:inline">Leave Waitlist</span>
+                            <span className="sm:hidden">Leave</span>
                           </button>
                         ) : (
                           <button
                             onClick={handleJoinWaitlist}
-                            className="px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2 bg-yellow-500/20 text-yellow-400 border-2 border-yellow-500/50 hover:bg-yellow-500/30"
+                            className="px-3 sm:px-6 py-2 sm:py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2 bg-yellow-500/20 text-yellow-400 border-2 border-yellow-500/50 hover:bg-yellow-500/30 text-sm sm:text-base"
                           >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                             </svg>
-                            Join Waitlist
+                            <span className="hidden sm:inline">Join Waitlist</span>
+                            <span className="sm:hidden">Waitlist</span>
                           </button>
                         )
                       ) : (
                         <button
                           onClick={handleCheckin}
-                          className="px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2 btn-primary"
+                          className="px-3 sm:px-6 py-2 sm:py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2 btn-primary text-sm sm:text-base"
                         >
-                          Check In Now
+                          <span className="hidden sm:inline">Check In Now</span>
+                          <span className="sm:hidden">Check In</span>
                         </button>
                       )}
                     </>

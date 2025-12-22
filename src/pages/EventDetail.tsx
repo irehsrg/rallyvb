@@ -708,7 +708,7 @@ export default function EventDetail() {
                         {/* Reply Form */}
                         {replyingTo === comment.id && player && (
                           <form onSubmit={(e) => handleSubmitReply(e, comment.id)} className="mt-3">
-                            <div className="flex gap-2">
+                            <div className="flex flex-col sm:flex-row gap-2">
                               <input
                                 type="text"
                                 value={replyContent}
@@ -718,23 +718,25 @@ export default function EventDetail() {
                                 maxLength={500}
                                 autoFocus
                               />
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setReplyingTo(null);
-                                  setReplyContent('');
-                                }}
-                                className="px-3 py-2 text-gray-500 hover:text-gray-300 text-sm"
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                type="submit"
-                                disabled={!replyContent.trim() || submittingComment}
-                                className="btn-primary text-sm py-2 px-4 disabled:opacity-50"
-                              >
-                                Reply
-                              </button>
+                              <div className="flex gap-2 justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setReplyingTo(null);
+                                    setReplyContent('');
+                                  }}
+                                  className="px-3 py-2 text-gray-500 hover:text-gray-300 text-sm"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="submit"
+                                  disabled={!replyContent.trim() || submittingComment}
+                                  className="btn-primary text-sm py-2 px-4 disabled:opacity-50"
+                                >
+                                  Reply
+                                </button>
+                              </div>
                             </div>
                           </form>
                         )}
