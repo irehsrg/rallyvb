@@ -8,9 +8,11 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-rally flex items-center justify-center">
-                <span className="text-white font-bold text-lg">R</span>
-              </div>
+              <img
+                src="/RallyIcon.png"
+                alt="Rally"
+                className="w-8 h-8 rounded-lg"
+              />
               <span className="text-xl font-bold text-gray-100">Rally</span>
             </div>
             <div className="flex items-center gap-3">
@@ -393,9 +395,11 @@ export default function Landing() {
       <footer className="py-8 px-4 sm:px-6 lg:px-8 border-t border-white/10">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded bg-gradient-rally flex items-center justify-center">
-              <span className="text-white font-bold text-sm">R</span>
-            </div>
+            <img
+              src="/RallyIcon.png"
+              alt="Rally"
+              className="w-6 h-6 rounded"
+            />
             <span className="text-gray-400 text-sm">Rally Volleyball</span>
           </div>
           <div className="flex items-center gap-6 text-sm text-gray-500">
