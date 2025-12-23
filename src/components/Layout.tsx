@@ -107,7 +107,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <header className="bg-rally-dark/80 backdrop-blur-xl border-b border-white/10 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
-            <Link to="/" className="flex items-center gap-3 group">
+            <Link to="/home" className="flex items-center gap-3 group">
               <img
                 src="/RallyIcon.png"
                 alt="Rally"
@@ -208,7 +208,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {user && (
         <aside className="hidden md:block fixed left-0 top-20 bottom-0 w-64 bg-rally-dark/50 backdrop-blur-xl border-r border-white/10 overflow-y-auto">
           <nav className="p-4 space-y-2">
-            <Link to="/" className={navLinkClass('/')}>
+            <Link to="/home" className={navLinkClass('/home')}>
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
               </svg>
@@ -274,7 +274,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {user && (
         <nav className="fixed bottom-0 left-0 right-0 bg-rally-dark/95 backdrop-blur-xl border-t border-white/10 md:hidden z-50">
           <div className={`grid ${player?.is_admin ? 'grid-cols-6' : 'grid-cols-5'} gap-1`}>
-            <Link to="/" className={mobileNavClass('/')}>
+            <Link to="/home" className={mobileNavClass('/home')}>
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
               </svg>

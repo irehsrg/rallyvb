@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import Layout from './components/Layout';
+import Landing from './pages/Landing';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -49,12 +50,18 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
-      <Route path="/signup" element={user ? <Navigate to="/" /> : <Signup />} />
+      <Route path="/login" element={user ? <Navigate to="/home" /> : <Login />} />
+      <Route path="/signup" element={user ? <Navigate to="/home" /> : <Signup />} />
       <Route path="/guest-checkin/:sessionId" element={<GuestCheckin />} />
 
+      {/* Landing page for non-authenticated users, redirect to home if logged in */}
       <Route
         path="/"
+        element={user ? <Navigate to="/home" /> : <Landing />}
+      />
+
+      <Route
+        path="/home"
         element={
           <Layout>
             <Home />
