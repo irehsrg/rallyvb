@@ -134,6 +134,7 @@ export default function TournamentManager() {
   }
 
   return (
+    <>
     <div className="card-glass p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -260,35 +261,37 @@ export default function TournamentManager() {
         </div>
       )}
 
-      {/* Create/Edit Tournament Modal */}
-      {(showCreateModal || editingTournament) && (
-        <TournamentFormModal
-          tournament={editingTournament}
-          venues={venues}
-          onClose={() => {
-            setShowCreateModal(false);
-            setEditingTournament(null);
-          }}
-          onSuccess={() => {
-            setShowCreateModal(false);
-            setEditingTournament(null);
-            fetchTournaments();
-          }}
-        />
-      )}
-
-      {/* Team Management Modal */}
-      {managingTeams && (
-        <TeamManagementModal
-          tournament={managingTeams}
-          onClose={() => setManagingTeams(null)}
-          onSuccess={() => {
-            setManagingTeams(null);
-            fetchTournaments();
-          }}
-        />
-      )}
     </div>
+
+    {/* Create/Edit Tournament Modal - Outside card-glass for proper z-index */}
+    {(showCreateModal || editingTournament) && (
+      <TournamentFormModal
+        tournament={editingTournament}
+        venues={venues}
+        onClose={() => {
+          setShowCreateModal(false);
+          setEditingTournament(null);
+        }}
+        onSuccess={() => {
+          setShowCreateModal(false);
+          setEditingTournament(null);
+          fetchTournaments();
+        }}
+      />
+    )}
+
+    {/* Team Management Modal - Outside card-glass for proper z-index */}
+    {managingTeams && (
+      <TeamManagementModal
+        tournament={managingTeams}
+        onClose={() => setManagingTeams(null)}
+        onSuccess={() => {
+          setManagingTeams(null);
+          fetchTournaments();
+        }}
+      />
+    )}
+    </>
   );
 }
 

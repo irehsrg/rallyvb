@@ -80,6 +80,7 @@ export default function TeamManager() {
   }
 
   return (
+    <>
     <div className="card-glass p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -217,35 +218,37 @@ export default function TeamManager() {
         </div>
       )}
 
-      {/* Team Form Modal */}
-      {(showAddModal || editingTeam) && (
-        <TeamFormModal
-          team={editingTeam}
-          currentUserId={player?.id}
-          onClose={() => {
-            setShowAddModal(false);
-            setEditingTeam(null);
-          }}
-          onSuccess={() => {
-            fetchTeams();
-            setShowAddModal(false);
-            setEditingTeam(null);
-          }}
-        />
-      )}
-
-      {/* Roster Management Modal */}
-      {managingRoster && (
-        <RosterManagementModal
-          team={managingRoster}
-          onClose={() => setManagingRoster(null)}
-          onSuccess={() => {
-            fetchTeams();
-            setManagingRoster(null);
-          }}
-        />
-      )}
     </div>
+
+    {/* Team Form Modal - Outside card-glass for proper z-index */}
+    {(showAddModal || editingTeam) && (
+      <TeamFormModal
+        team={editingTeam}
+        currentUserId={player?.id}
+        onClose={() => {
+          setShowAddModal(false);
+          setEditingTeam(null);
+        }}
+        onSuccess={() => {
+          fetchTeams();
+          setShowAddModal(false);
+          setEditingTeam(null);
+        }}
+      />
+    )}
+
+    {/* Roster Management Modal - Outside card-glass for proper z-index */}
+    {managingRoster && (
+      <RosterManagementModal
+        team={managingRoster}
+        onClose={() => setManagingRoster(null)}
+        onSuccess={() => {
+          fetchTeams();
+          setManagingRoster(null);
+        }}
+      />
+    )}
+    </>
   );
 }
 
