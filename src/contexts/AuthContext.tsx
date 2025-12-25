@@ -8,7 +8,7 @@ interface AuthContextType {
   player: Player | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string, name: string) => Promise<void>;
+  signUp: (email: string, password: string, name: string, skillLevel?: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshPlayer: () => Promise<void>;
@@ -68,13 +68,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signUp = async (email: string, password: string, name: string) => {
+  const signUp = async (email: string, password: string, name: string, skillLevel?: string) => {
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
           name,
+          skill_level: skillLevel || 'regular',
         },
       },
     });

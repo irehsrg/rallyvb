@@ -2,10 +2,21 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
+type SkillLevel = 'beginner' | 'casual' | 'regular' | 'experienced' | 'advanced';
+
+const SKILL_LEVELS: { value: SkillLevel; label: string }[] = [
+  { value: 'beginner', label: 'Just learning / New to volleyball' },
+  { value: 'casual', label: 'Casual player / Know the basics' },
+  { value: 'regular', label: 'Regular player / Comfortable in games' },
+  { value: 'experienced', label: 'Experienced / Played competitively' },
+  { value: 'advanced', label: 'Advanced / Tournament level' },
+];
+
 export default function Signup() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [skillLevel, setSkillLevel] = useState<SkillLevel>('regular');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { signUp } = useAuth();
@@ -17,8 +28,8 @@ export default function Signup() {
     setLoading(true);
 
     try {
-      await signUp(email, password, name);
-      navigate('/');
+      await signUp(email, password, name, skillLevel);
+      navigate('/home');
     } catch (err: any) {
       setError(err.message || 'Failed to create account');
     } finally {
@@ -110,6 +121,43 @@ export default function Signup() {
               <p className="mt-2 text-sm text-gray-500">
                 Must be at least 6 characters
               </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-3">
+                How would you describe your volleyball experience?
+              </label>
+              <div className="space-y-2">
+                {SKILL_LEVELS.map((level) => (
+                  <label
+                    key={level.value}
+                    className={`flex items-center p-3 rounded-xl cursor-pointer transition-all border-2 ${
+                      skillLevel === level.value
+                        ? 'bg-rally-coral/20 border-rally-coral/50 text-gray-100'
+                        : 'bg-rally-dark/50 border-white/10 text-gray-400 hover:border-white/20'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="skillLevel"
+                      value={level.value}
+                      checked={skillLevel === level.value}
+                      onChange={(e) => setSkillLevel(e.target.value as SkillLevel)}
+                      className="sr-only"
+                    />
+                    <div className={`w-4 h-4 rounded-full border-2 mr-3 flex items-center justify-center ${
+                      skillLevel === level.value
+                        ? 'border-rally-coral bg-rally-coral'
+                        : 'border-gray-500'
+                    }`}>
+                      {skillLevel === level.value && (
+                        <div className="w-2 h-2 rounded-full bg-white"></div>
+                      )}
+                    </div>
+                    <span className="text-sm">{level.label}</span>
+                  </label>
+                ))}
+              </div>
             </div>
           </div>
 
