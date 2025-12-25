@@ -11,6 +11,7 @@ import VenuesManager from '../components/VenuesManager';
 import AdminManager from '../components/AdminManager';
 import TeamManager from '../components/TeamManager';
 import TournamentManager from '../components/TournamentManager';
+import PlayerRatingManager from '../components/PlayerRatingManager';
 import { getAdminPermissions, getAdminRoleDisplayName } from '../utils/permissions';
 import { notifySessionCreated, notifyGameResult } from '../utils/notifications';
 
@@ -1453,6 +1454,13 @@ export default function Admin() {
         {permissions.canManageAdmins && (
           <div className="mt-8 animate-slide-up">
             <AdminManager />
+          </div>
+        )}
+
+        {/* Player Rating Management */}
+        {permissions.canAdjustRatings && (
+          <div className="mt-8 animate-slide-up">
+            <PlayerRatingManager />
           </div>
         )}
 
