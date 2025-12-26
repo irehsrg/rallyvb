@@ -13,6 +13,7 @@ import TeamManager from '../components/TeamManager';
 import TournamentManager from '../components/TournamentManager';
 import PlayerRatingManager from '../components/PlayerRatingManager';
 import AdminVenueAssignments from '../components/AdminVenueAssignments';
+import SessionTeamsManager from '../components/SessionTeamsManager';
 import { getAdminPermissions, getAdminRoleDisplayName, getAssignedVenueIds, isVenueScoped } from '../utils/permissions';
 import { notifySessionCreated, notifyGameResult } from '../utils/notifications';
 
@@ -50,6 +51,7 @@ export default function Admin() {
   const [venues, setVenues] = useState<Venue[]>([]);
   const [selectedVenueId, setSelectedVenueId] = useState<string>('');
   const [assignedVenueIds, setAssignedVenueIds] = useState<string[]>([]);
+  const [useSessionTeams, setUseSessionTeams] = useState(false);
 
   // Edit session state
   const [showEditSessionModal, setShowEditSessionModal] = useState(false);
@@ -1213,7 +1215,53 @@ export default function Admin() {
                 </div>
               </div>
 
-              {activeSession.status === 'setup' && permissions.canGenerateTeams && (
+              {/* Team Mode Toggle */}
+              {permissions.canGenerateTeams && (
+                <div className="flex items-center gap-4 p-4 bg-rally-dark/30 rounded-xl border border-white/10">
+                  <span className="text-sm text-gray-300">Team Mode:</span>
+                  <div className="flex rounded-lg border border-white/20 overflow-hidden">
+                    <button
+                      onClick={() => setUseSessionTeams(false)}
+                      className={`px-4 py-2 text-sm font-medium transition-colors ${
+                        !useSessionTeams
+                          ? 'bg-rally-coral text-white'
+                          : 'bg-rally-dark/50 text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      Per-Game
+                    </button>
+                    <button
+                      onClick={() => setUseSessionTeams(true)}
+                      className={`px-4 py-2 text-sm font-medium transition-colors ${
+                        useSessionTeams
+                          ? 'bg-rally-coral text-white'
+                          : 'bg-rally-dark/50 text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      Session Teams
+                    </button>
+                  </div>
+                  <span className="text-xs text-gray-500">
+                    {useSessionTeams
+                      ? 'Teams stay together for entire session'
+                      : 'New teams each game'}
+                  </span>
+                </div>
+              )}
+
+              {/* Session Teams Mode */}
+              {useSessionTeams && permissions.canGenerateTeams && (
+                <SessionTeamsManager
+                  session={activeSession}
+                  checkins={checkins.map(c => ({ player: c.player }))}
+                  games={games}
+                  onTeamsCreated={fetchActiveSession}
+                  onGamesGenerated={() => fetchGames(activeSession.id)}
+                />
+              )}
+
+              {/* Per-Game Mode - Original Generate Teams */}
+              {!useSessionTeams && activeSession.status === 'setup' && permissions.canGenerateTeams && (
                 <button
                   onClick={handleGenerateTeams}
                   disabled={checkins.length < 4}
@@ -1223,12 +1271,12 @@ export default function Admin() {
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
-                    Generate Teams
+                    Generate Teams (New Each Game)
                   </span>
                 </button>
               )}
 
-              {activeSession.status === 'active' && (
+              {!useSessionTeams && activeSession.status === 'active' && (
                 <button
                   onClick={handleGenerateAdditionalGames}
                   disabled={checkins.length < 4}

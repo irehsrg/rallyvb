@@ -3,6 +3,7 @@
 export type PlayerPosition = 'setter' | 'outside' | 'middle' | 'opposite' | 'libero' | 'any';
 export type SkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'expert';
 export type AdminRole = 'super_admin' | 'location_admin' | 'scorekeeper' | 'team_manager' | 'host';
+export type RotationMode = 'manual' | 'king_of_court' | 'round_robin' | 'swiss';
 
 export interface NotificationPreferences {
   session_created: boolean;
@@ -84,6 +85,9 @@ export interface Session {
   template_name?: string;
   cancelled_at?: string | null;
   cancellation_reason?: string;
+  // Rotation/team management
+  rotation_mode?: RotationMode;
+  current_round?: number;
 }
 
 export interface SessionCheckin {
@@ -106,6 +110,45 @@ export interface Game {
   completed_at: string | null;
   team_a?: Player[]; // Joined data
   team_b?: Player[]; // Joined data
+  // Round-based play
+  round_number?: number;
+  session_team_a_id?: string;
+  session_team_b_id?: string;
+  session_team_a?: SessionTeam; // Joined
+  session_team_b?: SessionTeam; // Joined
+}
+
+// Persistent teams for a session (used in King of Court, Round Robin, etc.)
+export interface SessionTeam {
+  id: string;
+  session_id: string;
+  team_name: string;
+  team_number: number;
+  color?: string;
+  created_at: string;
+  players?: Player[]; // Joined
+  // Computed fields for UI
+  wins?: number;
+  losses?: number;
+  point_differential?: number;
+}
+
+export interface SessionTeamPlayer {
+  id: string;
+  session_team_id: string;
+  player_id: string;
+  joined_at: string;
+  player?: Player; // Joined
+}
+
+export interface SessionTeamMatchup {
+  id: string;
+  session_id: string;
+  team_1_id: string;
+  team_2_id: string;
+  game_id?: string;
+  round_number: number;
+  created_at: string;
 }
 
 export interface GamePlayer {
