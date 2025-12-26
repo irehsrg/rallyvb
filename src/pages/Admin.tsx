@@ -14,8 +14,10 @@ import TournamentManager from '../components/TournamentManager';
 import PlayerRatingManager from '../components/PlayerRatingManager';
 import AdminVenueAssignments from '../components/AdminVenueAssignments';
 import SessionTeamsManager from '../components/SessionTeamsManager';
+import GroupBulkCheckin from '../components/GroupBulkCheckin';
 import { getAdminPermissions, getAdminRoleDisplayName, getAssignedVenueIds, isVenueScoped } from '../utils/permissions';
 import { notifySessionCreated, notifyGameResult } from '../utils/notifications';
+import { shouldSkipRatings } from '../utils/rotation';
 
 export default function Admin() {
   const { player } = useAuth();
@@ -791,6 +793,9 @@ export default function Admin() {
   const handleRecordResult = async (gameId: string, scoreA: number, scoreB: number, setScores?: SetScore[]) => {
     const winner = scoreA > scoreB ? 'A' : 'B';
 
+    // Check if we should skip rating changes (e.g., Speed mode)
+    const skipRatings = activeSession?.rotation_mode && shouldSkipRatings(activeSession.rotation_mode);
+
     try {
       const { data: gamePlayers, error: fetchError } = await supabase
         .from('game_players')
@@ -799,54 +804,79 @@ export default function Admin() {
 
       if (fetchError) throw fetchError;
 
-      const teamA = gamePlayers.filter(gp => gp.team === 'A');
-      const teamB = gamePlayers.filter(gp => gp.team === 'B');
+      // Only process ratings if not in speed mode
+      if (!skipRatings) {
+        const teamA = gamePlayers.filter(gp => gp.team === 'A');
+        const teamB = gamePlayers.filter(gp => gp.team === 'B');
 
-      const avgA = teamA.reduce((sum, gp) => sum + gp.rating_before, 0) / teamA.length;
-      const avgB = teamB.reduce((sum, gp) => sum + gp.rating_before, 0) / teamB.length;
+        const avgA = teamA.reduce((sum, gp) => sum + gp.rating_before, 0) / teamA.length;
+        const avgB = teamB.reduce((sum, gp) => sum + gp.rating_before, 0) / teamB.length;
 
-      for (const gp of gamePlayers) {
-        const isTeamA = gp.team === 'A';
-        const won = (winner === 'A' && isTeamA) || (winner === 'B' && !isTeamA);
-        const teamAvg = isTeamA ? avgA : avgB;
-        const oppAvg = isTeamA ? avgB : avgA;
+        for (const gp of gamePlayers) {
+          const isTeamA = gp.team === 'A';
+          const won = (winner === 'A' && isTeamA) || (winner === 'B' && !isTeamA);
+          const teamAvg = isTeamA ? avgA : avgB;
+          const oppAvg = isTeamA ? avgB : avgA;
 
-        const change = calculateEloChange(teamAvg, oppAvg, won);
-        const newRating = gp.rating_before + change;
+          const change = calculateEloChange(teamAvg, oppAvg, won);
+          const newRating = gp.rating_before + change;
 
-        await supabase
-          .from('game_players')
-          .update({ rating_after: newRating, rating_change: change })
-          .eq('id', gp.id);
+          await supabase
+            .from('game_players')
+            .update({ rating_after: newRating, rating_change: change })
+            .eq('id', gp.id);
 
-        const newWins = won ? gp.player.wins + 1 : gp.player.wins;
-        const newLosses = won ? gp.player.losses : gp.player.losses + 1;
-        const newStreak = won ? gp.player.win_streak + 1 : 0;
-        const bestStreak = Math.max(newStreak, gp.player.best_win_streak);
+          const newWins = won ? gp.player.wins + 1 : gp.player.wins;
+          const newLosses = won ? gp.player.losses : gp.player.losses + 1;
+          const newStreak = won ? gp.player.win_streak + 1 : 0;
+          const bestStreak = Math.max(newStreak, gp.player.best_win_streak);
 
-        await supabase
-          .from('players')
-          .update({
-            rating: newRating,
-            games_played: gp.player.games_played + 1,
-            wins: newWins,
-            losses: newLosses,
-            win_streak: newStreak,
-            best_win_streak: bestStreak,
-            last_played_at: new Date().toISOString(),
-          })
-          .eq('id', gp.player_id);
+          await supabase
+            .from('players')
+            .update({
+              rating: newRating,
+              games_played: gp.player.games_played + 1,
+              wins: newWins,
+              losses: newLosses,
+              win_streak: newStreak,
+              best_win_streak: bestStreak,
+              last_played_at: new Date().toISOString(),
+            })
+            .eq('id', gp.player_id);
 
-        await supabase.from('rating_history').insert({
-          player_id: gp.player_id,
-          game_id: gameId,
-          previous_rating: gp.rating_before,
-          new_rating: newRating,
-          change: change,
-        });
+          await supabase.from('rating_history').insert({
+            player_id: gp.player_id,
+            game_id: gameId,
+            previous_rating: gp.rating_before,
+            new_rating: newRating,
+            change: change,
+          });
 
-        // Send push notification to player about their game result
-        notifyGameResult(gp.player_id, won ? 'win' : 'loss', change, newRating);
+          // Send push notification to player about their game result
+          notifyGameResult(gp.player_id, won ? 'win' : 'loss', change, newRating);
+        }
+      } else {
+        // Speed mode: Just update games_played and last_played_at, no rating changes
+        for (const gp of gamePlayers) {
+          const isTeamA = gp.team === 'A';
+          const won = (winner === 'A' && isTeamA) || (winner === 'B' && !isTeamA);
+
+          await supabase
+            .from('game_players')
+            .update({ rating_after: gp.rating_before, rating_change: 0 })
+            .eq('id', gp.id);
+
+          await supabase
+            .from('players')
+            .update({
+              games_played: gp.player.games_played + 1,
+              last_played_at: new Date().toISOString(),
+            })
+            .eq('id', gp.player_id);
+
+          // Notify without rating change for speed mode
+          notifyGameResult(gp.player_id, won ? 'win' : 'loss', 0, gp.rating_before);
+        }
       }
 
       const gameUpdate: any = {
@@ -868,7 +898,7 @@ export default function Admin() {
         .update(gameUpdate)
         .eq('id', gameId);
 
-      alert('Result recorded successfully!');
+      alert(skipRatings ? 'Result recorded! (Speed mode - no rating changes)' : 'Result recorded successfully!');
       await fetchActiveSession();
     } catch (error: any) {
       console.error('Error recording result:', error);
@@ -1194,6 +1224,17 @@ export default function Admin() {
                   </>
                 )}
               </div>
+
+              {/* Group Bulk Check-in */}
+              {activeSession.status === 'setup' && (
+                <div className="mb-6">
+                  <GroupBulkCheckin
+                    sessionId={activeSession.id}
+                    existingCheckins={checkins}
+                    onCheckinComplete={() => fetchCheckins(activeSession.id)}
+                  />
+                </div>
+              )}
 
               {/* Checked-in Players */}
               <div className="mb-6">

@@ -3,7 +3,7 @@
 export type PlayerPosition = 'setter' | 'outside' | 'middle' | 'opposite' | 'libero' | 'any';
 export type SkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'expert';
 export type AdminRole = 'super_admin' | 'location_admin' | 'scorekeeper' | 'team_manager' | 'host';
-export type RotationMode = 'manual' | 'king_of_court' | 'round_robin' | 'swiss';
+export type RotationMode = 'manual' | 'king_of_court' | 'round_robin' | 'swiss' | 'speed';
 
 export interface NotificationPreferences {
   session_created: boolean;

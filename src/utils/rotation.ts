@@ -29,6 +29,8 @@ export function generateNextRound(
       return generateRoundRobinRound(teams, completedGames, courtCount, currentRound);
     case 'swiss':
       return generateSwissRound(teams, completedGames, courtCount, currentRound);
+    case 'speed':
+      return generateSpeedRound(teams, completedGames, courtCount, currentRound);
     case 'manual':
     default:
       return generateManualRound(teams, courtCount, currentRound);
@@ -283,6 +285,104 @@ function generateManualRound(
 }
 
 /**
+ * Speed mode: Rapid rotation, winners stay, losers immediately swap out
+ * - No rating changes (too playful/casual)
+ * - Losing team runs off immediately, next waiting team runs on
+ * - Optimized for quick games and continuous play
+ * - Uses a FIFO queue for waiting teams
+ */
+function generateSpeedRound(
+  teams: SessionTeam[],
+  completedGames: Game[],
+  courtCount: number,
+  currentRound: number
+): RotationResult {
+  const matchups: RoundMatchup[] = [];
+
+  if (currentRound === 1) {
+    // First round: Assign teams to courts in order, rest wait in queue
+    for (let court = 0; court < courtCount && court * 2 + 1 < teams.length; court++) {
+      matchups.push({
+        teamA: teams[court * 2],
+        teamB: teams[court * 2 + 1],
+        courtNumber: court + 1,
+      });
+    }
+    const benchedTeams = teams.slice(courtCount * 2);
+    return { matchups, benchedTeams, roundNumber: currentRound };
+  }
+
+  // Get last round's games to determine winners and losers
+  const lastRoundGames = completedGames.filter(g => g.round_number === currentRound - 1);
+
+  // Track who played in last round
+  const playedTeamIds = new Set<string>();
+  const winners: SessionTeam[] = [];
+  const losers: SessionTeam[] = [];
+
+  lastRoundGames.forEach(game => {
+    if (game.session_team_a_id) playedTeamIds.add(game.session_team_a_id);
+    if (game.session_team_b_id) playedTeamIds.add(game.session_team_b_id);
+
+    const teamA = teams.find(t => t.id === game.session_team_a_id);
+    const teamB = teams.find(t => t.id === game.session_team_b_id);
+
+    if (game.winner === 'A' && teamA && teamB) {
+      winners.push(teamA);
+      losers.push(teamB);
+    } else if (game.winner === 'B' && teamA && teamB) {
+      winners.push(teamB);
+      losers.push(teamA);
+    }
+  });
+
+  // Build waiting queue: teams that didn't play last round
+  const waitingQueue: SessionTeam[] = [];
+  teams.forEach(team => {
+    if (!playedTeamIds.has(team.id)) {
+      waitingQueue.push(team);
+    }
+  });
+
+  // Speed mode: Winners stay on court, waiting teams come in to challenge
+  // Losers go to the back of the waiting queue
+  const nextWaiting = [...losers]; // Losers go to back of queue
+  const challengers = waitingQueue.slice(0, winners.length); // Take enough to match winners
+
+  // Remaining waiting teams stay in queue
+  if (waitingQueue.length > winners.length) {
+    nextWaiting.push(...waitingQueue.slice(winners.length));
+  }
+
+  // Create matchups: each winner plays a challenger
+  for (let i = 0; i < winners.length && i < challengers.length; i++) {
+    matchups.push({
+      teamA: winners[i],
+      teamB: challengers[i],
+      courtNumber: i + 1,
+    });
+  }
+
+  // If we have more winners than challengers, winners play each other
+  if (winners.length > challengers.length) {
+    const unmatched = winners.slice(challengers.length);
+    for (let i = 0; i + 1 < unmatched.length && matchups.length < courtCount; i += 2) {
+      matchups.push({
+        teamA: unmatched[i],
+        teamB: unmatched[i + 1],
+        courtNumber: matchups.length + 1,
+      });
+    }
+    // If odd number of unmatched winners, one waits
+    if (unmatched.length % 2 === 1) {
+      nextWaiting.unshift(unmatched[unmatched.length - 1]); // Put at front since they won
+    }
+  }
+
+  return { matchups, benchedTeams: nextWaiting, roundNumber: currentRound };
+}
+
+/**
  * Calculate team standings from completed games
  */
 export function calculateStandings(teams: SessionTeam[], games: Game[]): SessionTeam[] {
@@ -345,6 +445,8 @@ export function getRotationModeName(mode: RotationMode): string {
       return 'Round Robin';
     case 'swiss':
       return 'Swiss (Winners vs Winners)';
+    case 'speed':
+      return 'Speed Mode';
     case 'manual':
     default:
       return 'Manual';
@@ -362,8 +464,17 @@ export function getRotationModeDescription(mode: RotationMode): string {
       return 'Every team plays every other team once';
     case 'swiss':
       return 'Teams with similar records play each other';
+    case 'speed':
+      return 'Rapid rotation, no rating changes - losers run off, next team runs on';
     case 'manual':
     default:
       return 'Manually assign matchups each round';
   }
+}
+
+/**
+ * Check if rotation mode should skip rating changes
+ */
+export function shouldSkipRatings(mode: RotationMode): boolean {
+  return mode === 'speed';
 }

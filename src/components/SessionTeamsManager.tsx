@@ -178,6 +178,79 @@ export default function SessionTeamsManager({
     }
   };
 
+  const handleRebuildTeams = async () => {
+    const currentTeamCount = sessionTeams.length;
+    if (currentTeamCount < 2) {
+      alert('Need at least 2 teams to rebuild');
+      return;
+    }
+
+    // Get all current players from existing teams
+    const currentPlayers = sessionTeams.flatMap(t => t.players || []);
+    if (currentPlayers.length < currentTeamCount * 2) {
+      alert(`Need at least ${currentTeamCount * 2} players to rebuild ${currentTeamCount} teams`);
+      return;
+    }
+
+    if (!confirm(`Rebuild ${currentTeamCount} teams with ${currentPlayers.length} current players? This will create new balanced teams.`)) {
+      return;
+    }
+
+    setGenerating(true);
+    try {
+      // Generate new balanced teams
+      const generatedTeams = generateTeams(currentPlayers, Math.ceil(currentTeamCount / 2), Math.ceil(currentPlayers.length / currentTeamCount), true, []);
+
+      // Flatten into teams
+      const allTeams: Player[][] = [];
+      generatedTeams.forEach(court => {
+        allTeams.push(court.teamA, court.teamB);
+      });
+      const teamsToCreate = allTeams.slice(0, currentTeamCount);
+
+      // Delete old teams (cascade deletes session_team_players)
+      await supabase
+        .from('session_teams')
+        .delete()
+        .eq('session_id', session.id);
+
+      // Create new teams
+      for (let i = 0; i < teamsToCreate.length; i++) {
+        const teamPlayers = teamsToCreate[i];
+
+        const { data: newTeam, error: teamError } = await supabase
+          .from('session_teams')
+          .insert({
+            session_id: session.id,
+            team_name: `Team ${i + 1}`,
+            team_number: i + 1,
+            color: TEAM_COLORS[i % TEAM_COLORS.length],
+          })
+          .select()
+          .single();
+
+        if (teamError) throw teamError;
+
+        const playerInserts = teamPlayers.map(player => ({
+          session_team_id: newTeam.id,
+          player_id: player.id,
+        }));
+
+        await supabase
+          .from('session_team_players')
+          .insert(playerInserts);
+      }
+
+      await fetchSessionTeams();
+      alert('Teams rebuilt successfully!');
+    } catch (error: any) {
+      console.error('Error rebuilding teams:', error);
+      alert('Failed to rebuild teams: ' + error.message);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const handleMovePlayer = async (fromTeamId: string, toTeamId: string, playerId: string) => {
     try {
       // Remove from old team
@@ -371,7 +444,7 @@ export default function SessionTeamsManager({
                 Rotation Mode
               </label>
               <div className="grid sm:grid-cols-2 gap-3">
-                {(['king_of_court', 'round_robin', 'swiss', 'manual'] as RotationMode[]).map((mode) => (
+                {(['king_of_court', 'round_robin', 'swiss', 'speed', 'manual'] as RotationMode[]).map((mode) => (
                   <button
                     key={mode}
                     onClick={() => setRotationMode(mode)}
@@ -422,6 +495,13 @@ export default function SessionTeamsManager({
             </p>
           </div>
           <div className="flex gap-2">
+            <button
+              onClick={handleRebuildTeams}
+              className="px-3 py-1.5 text-sm bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-colors"
+              disabled={generating}
+            >
+              {generating ? 'Rebuilding...' : 'Rebuild Teams'}
+            </button>
             <button
               onClick={handleDeleteTeams}
               className="px-3 py-1.5 text-sm bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors"

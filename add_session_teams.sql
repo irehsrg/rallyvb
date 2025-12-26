@@ -2,8 +2,13 @@
 -- This supports pickup volleyball formats like King of Court, Round Robin, etc.
 
 -- Add rotation mode to sessions
-ALTER TABLE sessions ADD COLUMN IF NOT EXISTS rotation_mode TEXT DEFAULT 'manual'
-  CHECK (rotation_mode IN ('manual', 'king_of_court', 'round_robin', 'swiss'));
+-- First add the column (if it doesn't exist), then update constraint to include 'speed'
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS rotation_mode TEXT DEFAULT 'manual';
+
+-- Drop old constraint if it exists and add new one with 'speed' option
+ALTER TABLE sessions DROP CONSTRAINT IF EXISTS sessions_rotation_mode_check;
+ALTER TABLE sessions ADD CONSTRAINT sessions_rotation_mode_check
+  CHECK (rotation_mode IN ('manual', 'king_of_court', 'round_robin', 'swiss', 'speed'));
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS current_round INTEGER DEFAULT 1;
 
 -- Session teams that persist throughout the session
