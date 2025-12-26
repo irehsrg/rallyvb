@@ -1,16 +1,4 @@
 import { useState } from 'react';
-import {
-  DndContext,
-  DragEndEvent,
-  DragOverlay,
-  DragStartEvent,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  closestCenter,
-} from '@dnd-kit/core';
-import { SortableContext, useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { Player } from '../types';
 import { supabase } from '../lib/supabase';
 
@@ -27,153 +15,124 @@ interface TeamEditorModalProps {
   onSave: () => void;
 }
 
-interface DraggablePlayerProps {
-  player: Player;
-  gameId: string;
-  team: 'A' | 'B';
-}
-
-function DraggablePlayer({ player, gameId, team }: DraggablePlayerProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: `${gameId}-${team}-${player.id}` });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      className="bg-rally-dark/50 rounded-lg p-3 cursor-move hover:bg-rally-dark/70 transition-all border border-white/5 hover:border-rally-coral/30"
-    >
-      <div className="flex items-center justify-between">
-        <div className="flex-1 min-w-0">
-          <div className="font-medium text-gray-100 truncate">{player.name}</div>
-          <div className="flex items-center gap-2 text-xs text-gray-400">
-            {player.position && (
-              <span className="px-1.5 py-0.5 bg-rally-coral/20 text-rally-coral rounded">
-                {player.position}
-              </span>
-            )}
-            <span>Rating: {player.rating}</span>
-          </div>
-        </div>
-        <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
-        </svg>
-      </div>
-    </div>
-  );
-}
-
 export default function TeamEditorModal({ games: initialGames, onClose, onSave }: TeamEditorModalProps) {
   const [games, setGames] = useState<GameData[]>(initialGames);
-  const [activePlayer, setActivePlayer] = useState<Player | null>(null);
+  const [selectedPlayer, setSelectedPlayer] = useState<{
+    gameId: string;
+    team: 'A' | 'B';
+    playerId: string;
+  } | null>(null);
   const [saving, setSaving] = useState(false);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    })
-  );
-
-  const handleDragStart = (event: DragStartEvent) => {
-    const [gameId, team, playerId] = (event.active.id as string).split('-');
-    const game = games.find(g => g.id === gameId);
-    if (!game) return;
-
-    const teamPlayers = team === 'A' ? game.team_a : game.team_b;
-    const player = teamPlayers.find(p => p.id === playerId);
-    if (player) {
-      setActivePlayer(player);
-    }
-  };
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    setActivePlayer(null);
-
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    const [sourceGameId, sourceTeam, playerId] = (active.id as string).split('-');
-    const [targetGameId, targetTeam] = (over.id as string).split('-');
-
-    // Don't allow moving to the same position
-    if (sourceGameId === targetGameId && sourceTeam === targetTeam) return;
-
-    setGames(prevGames => {
-      const newGames = [...prevGames];
-      const sourceGame = newGames.find(g => g.id === sourceGameId);
-      const targetGame = newGames.find(g => g.id === targetGameId);
-
-      if (!sourceGame || !targetGame) return prevGames;
-
-      // Find and remove player from source team
-      const sourceTeamKey = sourceTeam === 'A' ? 'team_a' : 'team_b';
-      const sourceTeamPlayers = sourceGame[sourceTeamKey];
-      const playerIndex = sourceTeamPlayers.findIndex(p => p.id === playerId);
-      if (playerIndex === -1) return prevGames;
-
-      const [movedPlayer] = sourceTeamPlayers.splice(playerIndex, 1);
-
-      // Add player to target team
-      const targetTeamKey = targetTeam === 'A' ? 'team_a' : 'team_b';
-      targetGame[targetTeamKey].push(movedPlayer);
-
-      return newGames;
-    });
-  };
-
-  const handleDragOver = (event: any) => {
-    const { over } = event;
-    if (!over) return;
-
-    // Allow dropping on team containers
-    const overId = over.id as string;
-    if (overId.endsWith('-drop-zone')) {
-      return;
-    }
-  };
 
   const calculateTeamRating = (players: Player[]) => {
     if (players.length === 0) return 0;
     return Math.round(players.reduce((sum, p) => sum + p.rating, 0) / players.length);
   };
 
+  // Handle player selection for swapping
+  const handlePlayerClick = (gameId: string, team: 'A' | 'B', playerId: string) => {
+    if (!selectedPlayer) {
+      // First selection
+      setSelectedPlayer({ gameId, team, playerId });
+    } else if (selectedPlayer.playerId === playerId && selectedPlayer.gameId === gameId) {
+      // Clicking same player deselects
+      setSelectedPlayer(null);
+    } else {
+      // Second selection - perform swap
+      performSwap(
+        selectedPlayer.gameId,
+        selectedPlayer.team,
+        selectedPlayer.playerId,
+        gameId,
+        team,
+        playerId
+      );
+      setSelectedPlayer(null);
+    }
+  };
+
+  // Move player to other team (within same game)
+  const moveToOtherTeam = (gameId: string, fromTeam: 'A' | 'B', playerId: string) => {
+    setGames(prevGames => {
+      return prevGames.map(game => {
+        if (game.id !== gameId) return game;
+
+        const fromKey = fromTeam === 'A' ? 'team_a' : 'team_b';
+        const toKey = fromTeam === 'A' ? 'team_b' : 'team_a';
+
+        const playerIndex = game[fromKey].findIndex(p => p.id === playerId);
+        if (playerIndex === -1) return game;
+
+        const newFromTeam = [...game[fromKey]];
+        const [movedPlayer] = newFromTeam.splice(playerIndex, 1);
+        const newToTeam = [...game[toKey], movedPlayer];
+
+        return {
+          ...game,
+          [fromKey]: newFromTeam,
+          [toKey]: newToTeam,
+        };
+      });
+    });
+    setSelectedPlayer(null);
+  };
+
+  // Swap two players
+  const performSwap = (
+    gameId1: string,
+    team1: 'A' | 'B',
+    playerId1: string,
+    gameId2: string,
+    team2: 'A' | 'B',
+    playerId2: string
+  ) => {
+    setGames(prevGames => {
+      const newGames = prevGames.map(game => ({ ...game, team_a: [...game.team_a], team_b: [...game.team_b] }));
+
+      const game1 = newGames.find(g => g.id === gameId1);
+      const game2 = newGames.find(g => g.id === gameId2);
+      if (!game1 || !game2) return prevGames;
+
+      const team1Key = team1 === 'A' ? 'team_a' : 'team_b';
+      const team2Key = team2 === 'A' ? 'team_a' : 'team_b';
+
+      const player1Index = game1[team1Key].findIndex(p => p.id === playerId1);
+      const player2Index = game2[team2Key].findIndex(p => p.id === playerId2);
+
+      if (player1Index === -1 || player2Index === -1) return prevGames;
+
+      // Swap the players
+      const player1 = game1[team1Key][player1Index];
+      const player2 = game2[team2Key][player2Index];
+
+      game1[team1Key][player1Index] = player2;
+      game2[team2Key][player2Index] = player1;
+
+      return newGames;
+    });
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Delete all existing game_players entries for these games
       const gameIds = games.map(g => g.id);
       await supabase
         .from('game_players')
         .delete()
         .in('game_id', gameIds);
 
-      // Insert new game_players entries
       const gamePlayersToInsert = games.flatMap(game => [
         ...game.team_a.map(player => ({
           game_id: game.id,
           player_id: player.id,
           team: 'A' as const,
+          rating_before: player.rating,
         })),
         ...game.team_b.map(player => ({
           game_id: game.id,
           player_id: player.id,
           team: 'B' as const,
+          rating_before: player.rating,
         })),
       ]);
 
@@ -184,7 +143,6 @@ export default function TeamEditorModal({ games: initialGames, onClose, onSave }
       if (error) throw error;
 
       onSave();
-      onClose();
     } catch (error) {
       console.error('Error saving teams:', error);
       alert('Failed to save teams. Please try again.');
@@ -193,135 +151,123 @@ export default function TeamEditorModal({ games: initialGames, onClose, onSave }
     }
   };
 
+  const isSelected = (gameId: string, team: 'A' | 'B', playerId: string) => {
+    return selectedPlayer?.gameId === gameId &&
+           selectedPlayer?.team === team &&
+           selectedPlayer?.playerId === playerId;
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="card-glass max-w-6xl w-full my-8 max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-rally-dark/95 backdrop-blur-sm p-6 border-b border-white/10 z-10">
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="card-glass max-w-4xl w-full max-h-[90vh] flex flex-col">
+        {/* Header - Fixed */}
+        <div className="flex-shrink-0 p-6 border-b border-white/10">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-2xl font-bold text-gray-100">Edit Teams</h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-200">
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-200 p-2">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
           <p className="text-gray-400 text-sm">
-            Drag and drop players to rearrange teams. Players can be moved between teams and courts.
+            {selectedPlayer
+              ? 'Click another player to swap positions, or click the same player to deselect'
+              : 'Click a player to select them, then click another to swap. Use arrows to move between teams.'}
           </p>
+          {selectedPlayer && (
+            <div className="mt-2 px-3 py-1.5 bg-rally-coral/20 border border-rally-coral/50 rounded-lg inline-flex items-center gap-2">
+              <span className="text-rally-coral text-sm font-medium">
+                Selected: {games.flatMap(g => [...g.team_a, ...g.team_b]).find(p => p.id === selectedPlayer.playerId)?.name}
+              </span>
+              <button
+                onClick={() => setSelectedPlayer(null)}
+                className="text-rally-coral hover:text-rally-accent"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
         </div>
 
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          onDragOver={handleDragOver}
-        >
-          <div className="p-6 space-y-6">
-            {games.map(game => {
-              const teamARating = calculateTeamRating(game.team_a);
-              const teamBRating = calculateTeamRating(game.team_b);
-              const ratingDiff = Math.abs(teamARating - teamBRating);
+        {/* Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {games.map(game => {
+            const teamARating = calculateTeamRating(game.team_a);
+            const teamBRating = calculateTeamRating(game.team_b);
+            const ratingDiff = Math.abs(teamARating - teamBRating);
 
-              return (
-                <div key={game.id} className="card-glass p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-xl font-bold text-gray-100">
-                      Court {game.court_number}
-                    </h3>
-                    <div className="text-sm">
-                      <span className={`font-medium ${ratingDiff > 50 ? 'text-red-400' : ratingDiff > 30 ? 'text-yellow-400' : 'text-green-400'}`}>
-                        Rating Diff: {ratingDiff}
+            return (
+              <div key={game.id} className="bg-rally-dark/50 rounded-xl p-4 border border-white/10">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-gray-100">
+                    Court {game.court_number}
+                  </h3>
+                  <div className={`text-sm font-medium px-3 py-1 rounded-lg ${
+                    ratingDiff > 100 ? 'bg-red-500/20 text-red-400' :
+                    ratingDiff > 50 ? 'bg-yellow-500/20 text-yellow-400' :
+                    'bg-green-500/20 text-green-400'
+                  }`}>
+                    Diff: {ratingDiff}
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  {/* Team A */}
+                  <div className="bg-blue-500/10 rounded-lg p-3 border border-blue-500/30">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-semibold text-blue-400">Team A</h4>
+                      <span className="text-sm text-gray-400">
+                        Avg: <span className="text-white font-medium">{teamARating}</span>
                       </span>
                     </div>
-                  </div>
-
-                  <div className="grid md:grid-cols-2 gap-4">
-                    {/* Team A */}
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="font-semibold text-rally-coral">Team A</h4>
-                        <div className="text-sm text-gray-400">
-                          Avg: <span className="text-gray-200 font-medium">{teamARating}</span>
-                          <span className="text-gray-500 ml-2">({game.team_a.length} players)</span>
-                        </div>
-                      </div>
-                      <SortableContext items={game.team_a.map(p => `${game.id}-A-${p.id}`)}>
-                        <div
-                          id={`${game.id}-A-drop-zone`}
-                          className="space-y-2 min-h-[100px] p-2 rounded-lg border-2 border-dashed border-white/10 bg-rally-darker/30"
-                        >
-                          {game.team_a.map(player => (
-                            <DraggablePlayer
-                              key={player.id}
-                              player={player}
-                              gameId={game.id}
-                              team="A"
-                            />
-                          ))}
-                          {game.team_a.length === 0 && (
-                            <div className="text-center text-gray-500 py-8">
-                              Drop players here
-                            </div>
-                          )}
-                        </div>
-                      </SortableContext>
-                    </div>
-
-                    {/* Team B */}
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="font-semibold text-rally-accent">Team B</h4>
-                        <div className="text-sm text-gray-400">
-                          Avg: <span className="text-gray-200 font-medium">{teamBRating}</span>
-                          <span className="text-gray-500 ml-2">({game.team_b.length} players)</span>
-                        </div>
-                      </div>
-                      <SortableContext items={game.team_b.map(p => `${game.id}-B-${p.id}`)}>
-                        <div
-                          id={`${game.id}-B-drop-zone`}
-                          className="space-y-2 min-h-[100px] p-2 rounded-lg border-2 border-dashed border-white/10 bg-rally-darker/30"
-                        >
-                          {game.team_b.map(player => (
-                            <DraggablePlayer
-                              key={player.id}
-                              player={player}
-                              gameId={game.id}
-                              team="B"
-                            />
-                          ))}
-                          {game.team_b.length === 0 && (
-                            <div className="text-center text-gray-500 py-8">
-                              Drop players here
-                            </div>
-                          )}
-                        </div>
-                      </SortableContext>
+                    <div className="space-y-2">
+                      {game.team_a.map(player => (
+                        <PlayerCard
+                          key={player.id}
+                          player={player}
+                          isSelected={isSelected(game.id, 'A', player.id)}
+                          onClick={() => handlePlayerClick(game.id, 'A', player.id)}
+                          onMoveToOtherTeam={() => moveToOtherTeam(game.id, 'A', player.id)}
+                          moveDirection="right"
+                          teamColor="blue"
+                        />
+                      ))}
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
 
-          <DragOverlay>
-            {activePlayer && (
-              <div className="bg-rally-dark rounded-lg p-3 shadow-2xl border border-rally-coral/50">
-                <div className="font-medium text-gray-100">{activePlayer.name}</div>
-                <div className="flex items-center gap-2 text-xs text-gray-400">
-                  {activePlayer.position && (
-                    <span className="px-1.5 py-0.5 bg-rally-coral/20 text-rally-coral rounded">
-                      {activePlayer.position}
-                    </span>
-                  )}
-                  <span>Rating: {activePlayer.rating}</span>
+                  {/* Team B */}
+                  <div className="bg-red-500/10 rounded-lg p-3 border border-red-500/30">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-semibold text-red-400">Team B</h4>
+                      <span className="text-sm text-gray-400">
+                        Avg: <span className="text-white font-medium">{teamBRating}</span>
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {game.team_b.map(player => (
+                        <PlayerCard
+                          key={player.id}
+                          player={player}
+                          isSelected={isSelected(game.id, 'B', player.id)}
+                          onClick={() => handlePlayerClick(game.id, 'B', player.id)}
+                          onMoveToOtherTeam={() => moveToOtherTeam(game.id, 'B', player.id)}
+                          moveDirection="left"
+                          teamColor="red"
+                        />
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
-            )}
-          </DragOverlay>
-        </DndContext>
+            );
+          })}
+        </div>
 
-        <div className="sticky bottom-0 bg-rally-dark/95 backdrop-blur-sm p-6 border-t border-white/10 flex gap-3">
+        {/* Footer - Fixed */}
+        <div className="flex-shrink-0 p-6 border-t border-white/10 flex gap-3">
           <button
             onClick={onClose}
             className="btn-secondary flex-1"
@@ -348,6 +294,77 @@ export default function TeamEditorModal({ games: initialGames, onClose, onSave }
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+interface PlayerCardProps {
+  player: Player;
+  isSelected: boolean;
+  onClick: () => void;
+  onMoveToOtherTeam: () => void;
+  moveDirection: 'left' | 'right';
+  teamColor: 'blue' | 'red';
+}
+
+function PlayerCard({ player, isSelected, onClick, onMoveToOtherTeam, moveDirection, teamColor }: PlayerCardProps) {
+  return (
+    <div
+      className={`flex items-center gap-2 p-2 rounded-lg transition-all ${
+        isSelected
+          ? 'bg-rally-coral/30 border-2 border-rally-coral ring-2 ring-rally-coral/50'
+          : 'bg-rally-dark/70 border border-white/10 hover:border-white/20'
+      }`}
+    >
+      {/* Move left button (for Team B) */}
+      {moveDirection === 'left' && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onMoveToOtherTeam();
+          }}
+          className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 transition-colors"
+          title="Move to Team A"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+      )}
+
+      {/* Player info - clickable for swap */}
+      <button
+        onClick={onClick}
+        className="flex-1 text-left min-w-0"
+      >
+        <div className="font-medium text-gray-100 truncate text-sm">{player.name}</div>
+        <div className="flex items-center gap-2 text-xs">
+          {player.position && player.position !== 'any' && (
+            <span className={`px-1.5 py-0.5 rounded ${
+              teamColor === 'blue' ? 'bg-blue-500/30 text-blue-300' : 'bg-red-500/30 text-red-300'
+            }`}>
+              {player.position}
+            </span>
+          )}
+          <span className="text-gray-400">{player.rating}</span>
+        </div>
+      </button>
+
+      {/* Move right button (for Team A) */}
+      {moveDirection === 'right' && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onMoveToOtherTeam();
+          }}
+          className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded bg-red-500/20 hover:bg-red-500/40 text-red-400 transition-colors"
+          title="Move to Team B"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }

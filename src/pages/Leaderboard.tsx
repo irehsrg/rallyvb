@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { Player } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import HeadToHeadModal from '../components/HeadToHeadModal';
+import VenueSelector from '../components/VenueSelector';
 
 interface RatingAdjustmentModalProps {
   player: Player;
@@ -144,10 +145,11 @@ export default function Leaderboard() {
   const [filterType, setFilterType] = useState<'all' | 'active'>('all');
   const [selectedOpponent, setSelectedOpponent] = useState<Player | null>(null);
   const [playerToAdjust, setPlayerToAdjust] = useState<Player | null>(null);
+  const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchLeaderboard();
-  }, []);
+  }, [selectedVenueId]);
 
   useEffect(() => {
     let filtered = players;
@@ -169,13 +171,37 @@ export default function Leaderboard() {
 
   const fetchLeaderboard = async () => {
     try {
-      const { data, error } = await supabase
-        .from('players')
-        .select('*')
-        .eq('is_guest', false) // Exclude guest players from leaderboard
-        .order('rating', { ascending: false });
+      let data: Player[] | null = null;
 
-      if (error) throw error;
+      if (selectedVenueId) {
+        // Use RPC function or join with player_venue_follows for venue-specific leaderboard
+        const { data: venueData, error: venueError } = await supabase
+          .from('player_venue_follows')
+          .select(`
+            player:players (*)
+          `)
+          .eq('venue_id', selectedVenueId);
+
+        if (venueError) throw venueError;
+
+        // Extract players and filter/sort
+        // Note: Supabase returns player as an object (not array) for single-row foreign key relations
+        data = (venueData as unknown as { player: Player | null }[] | null)
+          ?.map(v => v.player)
+          .filter((p): p is Player => p !== null && !p.is_guest)
+          .sort((a, b) => b.rating - a.rating) || [];
+      } else {
+        // Fetch all players
+        const { data: allData, error } = await supabase
+          .from('players')
+          .select('*')
+          .eq('is_guest', false)
+          .order('rating', { ascending: false });
+
+        if (error) throw error;
+        data = allData;
+      }
+
       setPlayers(data || []);
     } catch (error) {
       console.error('Error fetching leaderboard:', error);
@@ -217,14 +243,22 @@ export default function Leaderboard() {
 
         {/* Search and Filter */}
         <div className="mb-6 space-y-4">
-          {/* Search Bar */}
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search players..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="input-modern w-full"
+          {/* Search and Venue Filter Row */}
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                placeholder="Search players..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="input-modern w-full"
+              />
+            </div>
+            <VenueSelector
+              selectedVenueId={selectedVenueId}
+              onVenueChange={setSelectedVenueId}
+              showAllOption={true}
+              compact={true}
             />
           </div>
 

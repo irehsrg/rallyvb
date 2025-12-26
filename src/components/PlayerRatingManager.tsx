@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, logAdminAction } from '../lib/supabase';
 import { Player } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function PlayerRatingManager() {
+  const { player: currentAdmin } = useAuth();
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -57,6 +59,16 @@ export default function PlayerRatingManager() {
           ? { ...p, rating: newRating, highest_rating: Math.max(newRating, p.highest_rating || newRating) }
           : p
       ));
+
+      // Log the admin action
+      if (currentAdmin?.id) {
+        await logAdminAction(currentAdmin.id, 'adjust_rating', 'player', editingPlayer.id, {
+          player_name: editingPlayer.name,
+          previous_rating: editingPlayer.rating,
+          new_rating: newRating,
+          rating_change: newRating - editingPlayer.rating,
+        });
+      }
 
       setEditingPlayer(null);
       alert('Rating updated successfully!');

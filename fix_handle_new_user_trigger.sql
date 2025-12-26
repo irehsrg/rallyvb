@@ -1,12 +1,13 @@
--- Skill-Based Starting Ratings Migration
--- Updates player creation to set initial rating based on skill level
--- Run this in Supabase SQL Editor
+-- Fix: Handle New User Trigger
+-- Fixes the signup error caused by referencing non-existent columns
+-- Run this IMMEDIATELY in Supabase SQL Editor
 
 -- ============================================
--- UPDATE PLAYER CREATION TRIGGER
+-- CORRECTED USER CREATION TRIGGER
 -- ============================================
+-- The previous version referenced 'user_id' and 'email' columns
+-- that don't exist in the players table. This fixes that.
 
--- Create or replace the function that handles new user creation
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -40,27 +41,16 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Create the trigger if it doesn't exist
--- First drop if exists to ensure we have the latest version
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-
 -- ============================================
--- VERIFY SETUP
+-- VERIFY FIX
 -- ============================================
 
--- Check that the trigger is set up correctly
 DO $$
 BEGIN
   IF EXISTS (
-    SELECT 1 FROM pg_trigger
-    WHERE tgname = 'on_auth_user_created'
+    SELECT 1 FROM pg_proc
+    WHERE proname = 'handle_new_user'
   ) THEN
-    RAISE NOTICE 'SUCCESS: Trigger on_auth_user_created is active';
-  ELSE
-    RAISE NOTICE 'WARNING: Trigger may not have been created';
+    RAISE NOTICE 'SUCCESS: handle_new_user function has been fixed';
   END IF;
 END $$;

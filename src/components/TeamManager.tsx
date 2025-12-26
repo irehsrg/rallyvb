@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, logAdminAction } from '../lib/supabase';
 import { Team, TeamMember, Player } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -39,12 +39,21 @@ export default function TeamManager() {
 
   const handleToggleActive = async (team: Team) => {
     try {
+      const newActiveState = !team.is_active;
       const { error } = await supabase
         .from('teams')
-        .update({ is_active: !team.is_active })
+        .update({ is_active: newActiveState })
         .eq('id', team.id);
 
       if (error) throw error;
+
+      // Log the admin action
+      if (player?.id) {
+        await logAdminAction(player.id, newActiveState ? 'activate_team' : 'deactivate_team', 'team', team.id, {
+          team_name: team.name,
+        });
+      }
+
       await fetchTeams();
     } catch (error) {
       console.error('Error toggling team:', error);
@@ -52,7 +61,7 @@ export default function TeamManager() {
     }
   };
 
-  const handleDelete = async (teamId: string) => {
+  const handleDelete = async (team: Team) => {
     if (!confirm('Are you sure you want to delete this team? This action cannot be undone.')) {
       return;
     }
@@ -61,9 +70,18 @@ export default function TeamManager() {
       const { error } = await supabase
         .from('teams')
         .delete()
-        .eq('id', teamId);
+        .eq('id', team.id);
 
       if (error) throw error;
+
+      // Log the admin action
+      if (player?.id) {
+        await logAdminAction(player.id, 'delete_team', 'team', team.id, {
+          team_name: team.name,
+          member_count: team.members?.filter(m => m.is_active).length || 0,
+        });
+      }
+
       await fetchTeams();
     } catch (error) {
       console.error('Error deleting team:', error);
@@ -205,7 +223,7 @@ export default function TeamManager() {
                       {team.is_active ? 'Deactivate' : 'Activate'}
                     </button>
                     <button
-                      onClick={() => handleDelete(team.id)}
+                      onClick={() => handleDelete(team)}
                       className="px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 text-sm transition-all text-center"
                     >
                       Delete
@@ -225,6 +243,7 @@ export default function TeamManager() {
       <TeamFormModal
         team={editingTeam}
         currentUserId={player?.id}
+        adminId={player?.id}
         onClose={() => {
           setShowAddModal(false);
           setEditingTeam(null);
@@ -241,6 +260,7 @@ export default function TeamManager() {
     {managingRoster && (
       <RosterManagementModal
         team={managingRoster}
+        adminId={player?.id}
         onClose={() => setManagingRoster(null)}
         onSuccess={() => {
           fetchTeams();
@@ -256,11 +276,12 @@ export default function TeamManager() {
 interface TeamFormModalProps {
   team: Team | null;
   currentUserId?: string;
+  adminId?: string;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-function TeamFormModal({ team, currentUserId, onClose, onSuccess }: TeamFormModalProps) {
+function TeamFormModal({ team, currentUserId, adminId, onClose, onSuccess }: TeamFormModalProps) {
   const [name, setName] = useState(team?.name || '');
   const [description, setDescription] = useState(team?.description || '');
   const [logoUrl, setLogoUrl] = useState(team?.logo_url || '');
@@ -287,6 +308,14 @@ function TeamFormModal({ team, currentUserId, onClose, onSuccess }: TeamFormModa
           .eq('id', team.id);
 
         if (error) throw error;
+
+        // Log the admin action
+        if (adminId) {
+          await logAdminAction(adminId, 'update_team', 'team', team.id, {
+            team_name: name.trim(),
+            previous_name: team.name,
+          });
+        }
       } else {
         // Create new team
         const { data: newTeam, error: teamError } = await supabase
@@ -314,6 +343,13 @@ function TeamFormModal({ team, currentUserId, onClose, onSuccess }: TeamFormModa
             });
 
           if (memberError) throw memberError;
+        }
+
+        // Log the admin action
+        if (adminId && newTeam) {
+          await logAdminAction(adminId, 'create_team', 'team', newTeam.id, {
+            team_name: name.trim(),
+          });
         }
       }
 
@@ -404,11 +440,12 @@ function TeamFormModal({ team, currentUserId, onClose, onSuccess }: TeamFormModa
 // Roster Management Modal Component
 interface RosterManagementModalProps {
   team: Team;
+  adminId?: string;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-function RosterManagementModal({ team, onClose, onSuccess }: RosterManagementModalProps) {
+function RosterManagementModal({ team, adminId, onClose, onSuccess }: RosterManagementModalProps) {
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -443,7 +480,7 @@ function RosterManagementModal({ team, onClose, onSuccess }: RosterManagementMod
          p.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleAddMember = async (playerId: string) => {
+  const handleAddMember = async (playerId: string, playerName: string) => {
     setWorking(true);
     try {
       const { error } = await supabase
@@ -455,6 +492,16 @@ function RosterManagementModal({ team, onClose, onSuccess }: RosterManagementMod
         });
 
       if (error) throw error;
+
+      // Log the admin action
+      if (adminId) {
+        await logAdminAction(adminId, 'add_team_member', 'team', team.id, {
+          team_name: team.name,
+          player_id: playerId,
+          player_name: playerName,
+        });
+      }
+
       onSuccess();
     } catch (error: any) {
       console.error('Error adding member:', error);
@@ -464,7 +511,7 @@ function RosterManagementModal({ team, onClose, onSuccess }: RosterManagementMod
     }
   };
 
-  const handleRemoveMember = async (memberId: string) => {
+  const handleRemoveMember = async (member: TeamMember) => {
     if (!confirm('Remove this player from the team?')) return;
 
     setWorking(true);
@@ -472,9 +519,19 @@ function RosterManagementModal({ team, onClose, onSuccess }: RosterManagementMod
       const { error } = await supabase
         .from('team_members')
         .update({ is_active: false })
-        .eq('id', memberId);
+        .eq('id', member.id);
 
       if (error) throw error;
+
+      // Log the admin action
+      if (adminId) {
+        await logAdminAction(adminId, 'remove_team_member', 'team', team.id, {
+          team_name: team.name,
+          player_id: member.player_id,
+          player_name: member.player?.name,
+        });
+      }
+
       onSuccess();
     } catch (error: any) {
       console.error('Error removing member:', error);
@@ -494,6 +551,18 @@ function RosterManagementModal({ team, onClose, onSuccess }: RosterManagementMod
         .eq('id', member.id);
 
       if (error) throw error;
+
+      // Log the admin action
+      if (adminId) {
+        await logAdminAction(adminId, 'change_team_member_role', 'team', team.id, {
+          team_name: team.name,
+          player_id: member.player_id,
+          player_name: member.player?.name,
+          previous_role: member.role,
+          new_role: newRole,
+        });
+      }
+
       onSuccess();
     } catch (error: any) {
       console.error('Error updating role:', error);
@@ -549,7 +618,7 @@ function RosterManagementModal({ team, onClose, onSuccess }: RosterManagementMod
                       {member.role === 'manager' ? 'Demote' : 'Make Manager'}
                     </button>
                     <button
-                      onClick={() => handleRemoveMember(member.id)}
+                      onClick={() => handleRemoveMember(member)}
                       disabled={working}
                       className="px-3 py-1 text-xs rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-all disabled:opacity-50"
                     >
@@ -592,7 +661,7 @@ function RosterManagementModal({ team, onClose, onSuccess }: RosterManagementMod
                     </div>
                   </div>
                   <button
-                    onClick={() => handleAddMember(player.id)}
+                    onClick={() => handleAddMember(player.id, player.name)}
                     disabled={working}
                     className="px-3 py-1 text-sm rounded-lg bg-green-500/20 hover:bg-green-500/30 text-green-400 transition-all disabled:opacity-50"
                   >

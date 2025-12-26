@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase';
 import { Session as SessionType, Player, Waitlist } from '../types';
 import { Link } from 'react-router-dom';
 import GroupsModal from '../components/GroupsModal';
+import VenueSelector from '../components/VenueSelector';
+import VenueFollowButton from '../components/VenueFollowButton';
 
 export default function Home() {
   const { player } = useAuth();
@@ -17,10 +19,11 @@ export default function Home() {
   const [deadlinePassed, setDeadlinePassed] = useState(false);
   const [timeUntilDeadline, setTimeUntilDeadline] = useState<string | null>(null);
   const [showGroupsModal, setShowGroupsModal] = useState(false);
+  const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCurrentSession();
-  }, [player]);
+  }, [player, selectedVenueId]);
 
   // Check deadline status periodically
   useEffect(() => {
@@ -158,7 +161,7 @@ export default function Home() {
 
   const fetchCurrentSession = async () => {
     try {
-      const { data: session } = await supabase
+      let query = supabase
         .from('sessions')
         .select(`
           *,
@@ -166,8 +169,14 @@ export default function Home() {
         `)
         .in('status', ['setup', 'active'])
         .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+        .limit(1);
+
+      // Filter by venue if selected
+      if (selectedVenueId) {
+        query = query.eq('venue_id', selectedVenueId);
+      }
+
+      const { data: session } = await query.single();
 
       setCurrentSession(session as any);
 
@@ -176,6 +185,7 @@ export default function Home() {
       }
     } catch (error) {
       console.error('Error fetching session:', error);
+      setCurrentSession(null);
     } finally {
       setLoading(false);
     }
@@ -287,9 +297,17 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-rally-darker">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-4xl font-bold text-gray-100 mb-8 animate-fade-in">
-          Welcome back{player ? `, ${player.name.split(' ')[0]}` : ''}! 🏐
-        </h1>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 animate-fade-in">
+          <h1 className="text-4xl font-bold text-gray-100">
+            Welcome back{player ? `, ${player.name.split(' ')[0]}` : ''}!
+          </h1>
+          <VenueSelector
+            selectedVenueId={selectedVenueId}
+            onVenueChange={setSelectedVenueId}
+            showAllOption={true}
+            compact={true}
+          />
+        </div>
 
         {/* Stats Grid */}
         {player && (
@@ -372,7 +390,16 @@ export default function Home() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                     <div>
-                      <div className="font-semibold text-rally-coral mb-1">Location</div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-semibold text-rally-coral">Location</span>
+                        {currentSession.venue && player && (
+                          <VenueFollowButton
+                            venueId={currentSession.venue.id}
+                            venueName={currentSession.venue.name}
+                            compact={true}
+                          />
+                        )}
+                      </div>
                       {currentSession.venue ? (
                         <>
                           <div className="text-sm font-medium text-gray-200">{currentSession.venue.name}</div>

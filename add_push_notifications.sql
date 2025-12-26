@@ -67,6 +67,11 @@ CREATE POLICY "Players can delete own push subscriptions"
   TO authenticated
   USING (auth.uid() = player_id);
 
+CREATE POLICY "Players can update own push subscriptions"
+  ON push_subscriptions FOR UPDATE
+  TO authenticated
+  USING (auth.uid() = player_id);
+
 -- Service role can manage all subscriptions (for Edge Functions)
 CREATE POLICY "Service role can manage all push subscriptions"
   ON push_subscriptions FOR ALL

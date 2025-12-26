@@ -6,7 +6,9 @@ export interface PlayerGroup {
 }
 
 /**
- * Generate balanced teams using serpentine draft algorithm with position awareness
+ * Generate balanced teams using improved snake draft algorithm
+ * This ensures players are evenly distributed by skill level
+ *
  * @param players - List of checked-in players with ratings
  * @param courtCount - Number of courts available
  * @param teamSize - Players per team (default 6)
@@ -18,7 +20,7 @@ export function generateTeams(
   players: Player[],
   courtCount: number,
   teamSize: number = 6,
-  usePositionBalancing: boolean = true,
+  _usePositionBalancing: boolean = true, // Reserved for future position-aware balancing
   groups: PlayerGroup[] = []
 ): TeamAssignment[] {
   const totalNeeded = courtCount * teamSize * 2;
@@ -33,115 +35,26 @@ export function generateTeams(
   // Handle player groups first - assign them to teams
   const groupMemberIds = new Set<string>();
   if (groups.length > 0) {
-    // Sort groups by average rating (highest first) for balanced distribution
-    const sortedGroups = groups.sort((a, b) => {
-      const avgA = a.members.reduce((sum, p) => sum + p.rating, 0) / a.members.length;
-      const avgB = b.members.reduce((sum, p) => sum + p.rating, 0) / b.members.length;
-      return avgB - avgA;
-    });
-
-    // Assign groups to teams using serpentine pattern
-    let courtIndex = 0;
-    let teamKey: 'teamA' | 'teamB' = 'teamA';
-    let direction = 1;
-
-    for (const group of sortedGroups) {
-      // Find next team with enough space
-      let attempts = 0;
-      const maxAttempts = courtCount * 2; // teamA and teamB for each court
-
-      while (attempts < maxAttempts) {
-        const currentTeam = courts[courtIndex][teamKey];
-
-        if (currentTeam.length + group.members.length <= teamSize) {
-          // Add all group members to the same team
-          currentTeam.push(...group.members);
-          group.members.forEach(p => groupMemberIds.add(p.id));
-          break;
-        }
-
-        // Move to next team
-        if (teamKey === 'teamA') {
-          teamKey = 'teamB';
-        } else {
-          teamKey = 'teamA';
-          courtIndex += direction;
-
-          if (courtIndex >= courtCount || courtIndex < 0) {
-            direction *= -1;
-            courtIndex += direction;
-          }
-        }
-        attempts++;
-      }
-
-      // After placing a group, move to next team
-      if (teamKey === 'teamA') {
-        teamKey = 'teamB';
-      } else {
-        teamKey = 'teamA';
-        courtIndex += direction;
-
-        if (courtIndex >= courtCount || courtIndex < 0) {
-          direction *= -1;
-          courtIndex += direction;
-        }
-      }
-    }
+    assignGroupsToTeams(groups, courts, teamSize, groupMemberIds);
   }
 
   // Filter out players already in groups
   const remainingPlayers = activePlayers.filter(p => !groupMemberIds.has(p.id));
 
-  if (usePositionBalancing && remainingPlayers.some(p => p.position && p.position !== 'any')) {
-    // Position-based balancing for remaining players
-    fillTeamsWithPositionBalancing(remainingPlayers, courts, teamSize);
-    return courts.map((court, i) => ({
-      courtNumber: i + 1,
-      teamA: court.teamA,
-      teamB: court.teamB,
-    }));
+  // Sort players by rating (highest first)
+  const sortedPlayers = remainingPlayers.sort((a, b) => b.rating - a.rating);
+
+  if (courtCount === 1) {
+    // Single court: use optimized balancing for one game
+    assignPlayersToSingleCourt(sortedPlayers, courts[0], teamSize);
+  } else {
+    // Multiple courts: use snake draft across all courts
+    assignPlayersToMultipleCourts(sortedPlayers, courts, teamSize);
   }
 
-  // Standard rating-based serpentine assignment for remaining players
-  const sorted = remainingPlayers.sort((a, b) => b.rating - a.rating);
-  let courtIndex = 0;
-  let teamKey: 'teamA' | 'teamB' = 'teamA';
-  let direction = 1;
-
-  for (const player of sorted) {
-    // Find the next non-full team
-    let attempts = 0;
-    while (courts[courtIndex][teamKey].length >= teamSize && attempts < courtCount * 2) {
-      if (teamKey === 'teamA') {
-        teamKey = 'teamB';
-      } else {
-        teamKey = 'teamA';
-        courtIndex += direction;
-
-        if (courtIndex >= courtCount || courtIndex < 0) {
-          direction *= -1;
-          courtIndex += direction;
-        }
-      }
-      attempts++;
-    }
-
-    if (courts[courtIndex][teamKey].length < teamSize) {
-      courts[courtIndex][teamKey].push(player);
-    }
-
-    if (teamKey === 'teamA') {
-      teamKey = 'teamB';
-    } else {
-      teamKey = 'teamA';
-      courtIndex += direction;
-
-      if (courtIndex >= courtCount || courtIndex < 0) {
-        direction *= -1;
-        courtIndex += direction;
-      }
-    }
+  // Post-process: try to balance teams by swapping players if needed
+  for (const court of courts) {
+    optimizeTeamBalance(court);
   }
 
   return courts.map((court, i) => ({
@@ -152,48 +65,36 @@ export function generateTeams(
 }
 
 /**
- * Fill existing teams (courts) with remaining players using position-based balancing
+ * Assign groups to teams, keeping group members together
  */
-function fillTeamsWithPositionBalancing(
-  players: Player[],
+function assignGroupsToTeams(
+  groups: PlayerGroup[],
   courts: { teamA: Player[]; teamB: Player[] }[],
-  teamSize: number
+  teamSize: number,
+  groupMemberIds: Set<string>
 ): void {
-  // Group players by position and sort by rating within each position
-  const positions = {
-    setter: players.filter(p => p.position === 'setter').sort((a, b) => b.rating - a.rating),
-    libero: players.filter(p => p.position === 'libero').sort((a, b) => b.rating - a.rating),
-    outside: players.filter(p => p.position === 'outside').sort((a, b) => b.rating - a.rating),
-    middle: players.filter(p => p.position === 'middle').sort((a, b) => b.rating - a.rating),
-    opposite: players.filter(p => p.position === 'opposite').sort((a, b) => b.rating - a.rating),
-    any: players.filter(p => !p.position || p.position === 'any').sort((a, b) => b.rating - a.rating),
-  };
+  // Sort groups by average rating (highest first)
+  const sortedGroups = [...groups].sort((a, b) => {
+    const avgA = a.members.reduce((sum, p) => sum + p.rating, 0) / a.members.length;
+    const avgB = b.members.reduce((sum, p) => sum + p.rating, 0) / b.members.length;
+    return avgB - avgA;
+  });
 
-  // Flatten courts into teams array
+  // Use snake draft for groups across teams
   const teams: Player[][] = courts.flatMap(c => [c.teamA, c.teamB]);
-
-  // Distribute each position
-  distributePositionToTeams(positions.setter, teams, teamSize);
-  distributePositionToTeams(positions.libero, teams, teamSize);
-  distributePositionToTeams(positions.outside, teams, teamSize);
-  distributePositionToTeams(positions.middle, teams, teamSize);
-  distributePositionToTeams(positions.opposite, teams, teamSize);
-  distributePositionToTeams(positions.any, teams, teamSize);
-}
-
-/**
- * Distribute players of a specific position to teams, respecting team size limits
- */
-function distributePositionToTeams(positionPlayers: Player[], teams: Player[][], teamSize: number): void {
   let teamIndex = 0;
   let direction = 1;
 
-  for (const player of positionPlayers) {
-    // Find next non-full team
+  for (const group of sortedGroups) {
+    // Find a team with enough space
     let attempts = 0;
-    while (teams[teamIndex].length >= teamSize && attempts < teams.length) {
+    while (attempts < teams.length) {
+      if (teams[teamIndex].length + group.members.length <= teamSize) {
+        teams[teamIndex].push(...group.members);
+        group.members.forEach(p => groupMemberIds.add(p.id));
+        break;
+      }
       teamIndex += direction;
-
       if (teamIndex >= teams.length || teamIndex < 0) {
         direction *= -1;
         teamIndex += direction;
@@ -201,12 +102,8 @@ function distributePositionToTeams(positionPlayers: Player[], teams: Player[][],
       attempts++;
     }
 
-    if (teams[teamIndex].length < teamSize) {
-      teams[teamIndex].push(player);
-    }
-
+    // Move to next team for next group
     teamIndex += direction;
-
     if (teamIndex >= teams.length || teamIndex < 0) {
       direction *= -1;
       teamIndex += direction;
@@ -214,3 +111,149 @@ function distributePositionToTeams(positionPlayers: Player[], teams: Player[][],
   }
 }
 
+/**
+ * Optimized assignment for single court - ensures best possible balance
+ */
+function assignPlayersToSingleCourt(
+  sortedPlayers: Player[],
+  court: { teamA: Player[]; teamB: Player[] },
+  teamSize: number
+): void {
+  const teamASize = Math.min(teamSize, sortedPlayers.length - court.teamB.length);
+  const teamBSize = Math.min(teamSize, sortedPlayers.length - court.teamA.length);
+  const availableSlots = {
+    A: teamASize - court.teamA.length,
+    B: teamBSize - court.teamB.length,
+  };
+
+  // Snake draft: 1st to A, 2nd to B, 3rd to B, 4th to A, 5th to A, 6th to B, etc.
+  let currentTeam: 'A' | 'B' = 'A';
+  let countInRound = 0;
+  let roundSize = 1; // First round is 1, then alternates 2
+  let isFirstRound = true;
+
+  for (const player of sortedPlayers) {
+    if (availableSlots[currentTeam] > 0) {
+      if (currentTeam === 'A') {
+        court.teamA.push(player);
+      } else {
+        court.teamB.push(player);
+      }
+      availableSlots[currentTeam]--;
+    } else {
+      // Other team must have space
+      const otherTeam = currentTeam === 'A' ? 'B' : 'A';
+      if (otherTeam === 'A') {
+        court.teamA.push(player);
+      } else {
+        court.teamB.push(player);
+      }
+      availableSlots[otherTeam]--;
+    }
+
+    countInRound++;
+    if (countInRound >= roundSize) {
+      countInRound = 0;
+      currentTeam = currentTeam === 'A' ? 'B' : 'A';
+      if (isFirstRound) {
+        isFirstRound = false;
+        roundSize = 2;
+      }
+    }
+  }
+}
+
+/**
+ * Snake draft across multiple courts
+ */
+function assignPlayersToMultipleCourts(
+  sortedPlayers: Player[],
+  courts: { teamA: Player[]; teamB: Player[] }[],
+  teamSize: number
+): void {
+  // Flatten all teams for snake draft
+  const teams: Player[][] = courts.flatMap(c => [c.teamA, c.teamB]);
+  const teamSizes = teams.map(t => teamSize - t.length); // Available slots
+
+  let teamIndex = 0;
+  let direction = 1;
+
+  for (const player of sortedPlayers) {
+    // Find next team with available space
+    let attempts = 0;
+    while (teamSizes[teamIndex] <= 0 && attempts < teams.length) {
+      teamIndex += direction;
+      if (teamIndex >= teams.length) {
+        direction = -1;
+        teamIndex = teams.length - 1;
+      } else if (teamIndex < 0) {
+        direction = 1;
+        teamIndex = 0;
+      }
+      attempts++;
+    }
+
+    if (teamSizes[teamIndex] > 0) {
+      teams[teamIndex].push(player);
+      teamSizes[teamIndex]--;
+    }
+
+    // Move to next position in snake
+    teamIndex += direction;
+    if (teamIndex >= teams.length) {
+      direction = -1;
+      teamIndex = teams.length - 1;
+    } else if (teamIndex < 0) {
+      direction = 1;
+      teamIndex = 0;
+    }
+  }
+}
+
+/**
+ * Try to optimize team balance by swapping players if beneficial
+ */
+function optimizeTeamBalance(court: { teamA: Player[]; teamB: Player[] }): void {
+  const maxIterations = 20;
+  let improved = true;
+  let iterations = 0;
+
+  while (improved && iterations < maxIterations) {
+    improved = false;
+    iterations++;
+
+    const avgA = getTeamAverage(court.teamA);
+    const avgB = getTeamAverage(court.teamB);
+    const currentDiff = Math.abs(avgA - avgB);
+
+    // If already well balanced, stop
+    if (currentDiff < 10) break;
+
+    // Try swapping each pair of players
+    for (let i = 0; i < court.teamA.length && !improved; i++) {
+      for (let j = 0; j < court.teamB.length && !improved; j++) {
+        // Calculate what the new averages would be if we swapped
+        const playerA = court.teamA[i];
+        const playerB = court.teamB[j];
+
+        const newSumA = court.teamA.reduce((sum, p) => sum + p.rating, 0) - playerA.rating + playerB.rating;
+        const newSumB = court.teamB.reduce((sum, p) => sum + p.rating, 0) - playerB.rating + playerA.rating;
+        const newAvgA = newSumA / court.teamA.length;
+        const newAvgB = newSumB / court.teamB.length;
+        const newDiff = Math.abs(newAvgA - newAvgB);
+
+        // If this swap improves balance, do it
+        if (newDiff < currentDiff - 5) { // Must improve by at least 5 points
+          court.teamA[i] = playerB;
+          court.teamB[j] = playerA;
+          improved = true;
+        }
+      }
+    }
+  }
+}
+
+function getTeamAverage(players: Player[]): number {
+  if (players.length === 0) return 0;
+  return players.reduce((sum, p) => sum + p.rating, 0) / players.length;
+}

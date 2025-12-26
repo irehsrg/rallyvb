@@ -18,6 +18,9 @@ import TournamentView from './pages/TournamentView';
 import PlayerProfile from './pages/PlayerProfile';
 import EventFeed from './pages/EventFeed';
 import EventDetail from './pages/EventDetail';
+import Statistics from './pages/Statistics';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -52,6 +55,8 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/home" /> : <Login />} />
       <Route path="/signup" element={user ? <Navigate to="/home" /> : <Signup />} />
+      <Route path="/forgot-password" element={user ? <Navigate to="/home" /> : <ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/guest-checkin/:sessionId" element={<GuestCheckin />} />
 
       {/* Landing page for non-authenticated users, redirect to home if logged in */}
@@ -168,6 +173,15 @@ function AppRoutes() {
         element={
           <Layout>
             <EventDetail />
+          </Layout>
+        }
+      />
+
+      <Route
+        path="/statistics"
+        element={
+          <Layout>
+            <Statistics />
           </Layout>
         }
       />

@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, logAdminAction } from '../lib/supabase';
 import { Tournament, TournamentFormat, TournamentStatus, Venue, Team, TournamentTeam } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function TournamentManager() {
+  const { player } = useAuth();
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,9 +55,10 @@ export default function TournamentManager() {
     }
   };
 
-  const handleUpdateStatus = async (tournamentId: string, newStatus: TournamentStatus) => {
+  const handleUpdateStatus = async (tournament: Tournament, newStatus: TournamentStatus) => {
     try {
       const updateData: any = { status: newStatus };
+      const previousStatus = tournament.status;
 
       if (newStatus === 'completed') {
         updateData.completed_at = new Date().toISOString();
@@ -64,9 +67,18 @@ export default function TournamentManager() {
       const { error } = await supabase
         .from('tournaments')
         .update(updateData)
-        .eq('id', tournamentId);
+        .eq('id', tournament.id);
 
       if (error) throw error;
+
+      // Log the admin action
+      if (player?.id) {
+        await logAdminAction(player.id, 'update_tournament_status', 'tournament', tournament.id, {
+          tournament_name: tournament.name,
+          previous_status: previousStatus,
+          new_status: newStatus,
+        });
+      }
 
       await fetchTournaments();
       alert(`Tournament status updated to ${newStatus}!`);
@@ -76,7 +88,7 @@ export default function TournamentManager() {
     }
   };
 
-  const handleDelete = async (tournamentId: string) => {
+  const handleDelete = async (tournament: Tournament) => {
     if (!confirm('Are you sure you want to delete this tournament? This action cannot be undone.')) {
       return;
     }
@@ -85,9 +97,18 @@ export default function TournamentManager() {
       const { error } = await supabase
         .from('tournaments')
         .delete()
-        .eq('id', tournamentId);
+        .eq('id', tournament.id);
 
       if (error) throw error;
+
+      // Log the admin action
+      if (player?.id) {
+        await logAdminAction(player.id, 'delete_tournament', 'tournament', tournament.id, {
+          tournament_name: tournament.name,
+          tournament_status: tournament.status,
+          teams_count: tournament.teams?.length || 0,
+        });
+      }
 
       await fetchTournaments();
       alert('Tournament deleted successfully!');
@@ -205,7 +226,7 @@ export default function TournamentManager() {
 
                   {tournament.status === 'setup' && (
                     <button
-                      onClick={() => handleUpdateStatus(tournament.id, 'active')}
+                      onClick={() => handleUpdateStatus(tournament, 'active')}
                       className="px-3 py-1.5 rounded-lg bg-green-600/20 hover:bg-green-600/30 text-green-400 text-sm transition-all whitespace-nowrap"
                     >
                       Start Tournament
@@ -215,13 +236,13 @@ export default function TournamentManager() {
                   {tournament.status === 'active' && (
                     <>
                       <button
-                        onClick={() => handleUpdateStatus(tournament.id, 'completed')}
+                        onClick={() => handleUpdateStatus(tournament, 'completed')}
                         className="px-3 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 text-sm transition-all whitespace-nowrap"
                       >
                         Mark Complete
                       </button>
                       <button
-                        onClick={() => handleUpdateStatus(tournament.id, 'cancelled')}
+                        onClick={() => handleUpdateStatus(tournament, 'cancelled')}
                         className="px-3 py-1.5 rounded-lg bg-red-600/20 hover:bg-red-600/30 text-red-400 text-sm transition-all whitespace-nowrap"
                       >
                         Cancel
@@ -231,7 +252,7 @@ export default function TournamentManager() {
 
                   {(tournament.status === 'setup' || tournament.status === 'cancelled') && (
                     <button
-                      onClick={() => handleDelete(tournament.id)}
+                      onClick={() => handleDelete(tournament)}
                       className="px-3 py-1.5 rounded-lg bg-red-600/20 hover:bg-red-600/30 text-red-400 text-sm transition-all whitespace-nowrap"
                     >
                       Delete
@@ -268,6 +289,7 @@ export default function TournamentManager() {
       <TournamentFormModal
         tournament={editingTournament}
         venues={venues}
+        adminId={player?.id}
         onClose={() => {
           setShowCreateModal(false);
           setEditingTournament(null);
@@ -284,6 +306,7 @@ export default function TournamentManager() {
     {managingTeams && (
       <TeamManagementModal
         tournament={managingTeams}
+        adminId={player?.id}
         onClose={() => setManagingTeams(null)}
         onSuccess={() => {
           setManagingTeams(null);
@@ -298,11 +321,12 @@ export default function TournamentManager() {
 interface TournamentFormModalProps {
   tournament: Tournament | null;
   venues: Venue[];
+  adminId?: string;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-function TournamentFormModal({ tournament, venues, onClose, onSuccess }: TournamentFormModalProps) {
+function TournamentFormModal({ tournament, venues, adminId, onClose, onSuccess }: TournamentFormModalProps) {
   const [name, setName] = useState(tournament?.name || '');
   const [description, setDescription] = useState(tournament?.description || '');
   const [format, setFormat] = useState<TournamentFormat>(tournament?.format || 'single_elimination');
@@ -358,26 +382,40 @@ function TournamentFormModal({ tournament, venues, onClose, onSuccess }: Tournam
           .eq('id', tournament.id);
 
         if (error) throw error;
+
+        // Log the admin action
+        if (adminId) {
+          await logAdminAction(adminId, 'update_tournament', 'tournament', tournament.id, {
+            tournament_name: name.trim(),
+            previous_name: tournament.name,
+            format,
+          });
+        }
+
         alert('Tournament updated successfully!');
       } else {
         // Create new tournament
-        const { data: { user } } = await supabase.auth.getUser();
-
-        const { data: player } = await supabase
-          .from('players')
-          .select('id')
-          .eq('user_id', user?.id)
-          .single();
-
-        const { error } = await supabase
+        const { data: newTournament, error } = await supabase
           .from('tournaments')
           .insert({
             ...tournamentData,
-            created_by: player?.id || null,
+            created_by: adminId || null,
             status: 'setup',
-          });
+          })
+          .select()
+          .single();
 
         if (error) throw error;
+
+        // Log the admin action
+        if (adminId && newTournament) {
+          await logAdminAction(adminId, 'create_tournament', 'tournament', newTournament.id, {
+            tournament_name: name.trim(),
+            format,
+            start_date: startDate,
+          });
+        }
+
         alert('Tournament created successfully!');
       }
 
@@ -598,11 +636,12 @@ function TournamentFormModal({ tournament, venues, onClose, onSuccess }: Tournam
 
 interface TeamManagementModalProps {
   tournament: Tournament;
+  adminId?: string;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-function TeamManagementModal({ tournament, onClose, onSuccess }: TeamManagementModalProps) {
+function TeamManagementModal({ tournament, adminId, onClose, onSuccess }: TeamManagementModalProps) {
   const [allTeams, setAllTeams] = useState<Team[]>([]);
   const [registeredTeams, setRegisteredTeams] = useState<TournamentTeam[]>([]);
   const [loading, setLoading] = useState(true);
@@ -648,7 +687,7 @@ function TeamManagementModal({ tournament, onClose, onSuccess }: TeamManagementM
     }
   };
 
-  const handleAddTeam = async (teamId: string) => {
+  const handleAddTeam = async (team: Team) => {
     try {
       // Check max teams limit
       if (tournament.max_teams && registeredTeams.length >= tournament.max_teams) {
@@ -660,11 +699,20 @@ function TeamManagementModal({ tournament, onClose, onSuccess }: TeamManagementM
         .from('tournament_teams')
         .insert({
           tournament_id: tournament.id,
-          team_id: teamId,
+          team_id: team.id,
           seed: registeredTeams.length + 1,
         });
 
       if (error) throw error;
+
+      // Log the admin action
+      if (adminId) {
+        await logAdminAction(adminId, 'add_team_to_tournament', 'tournament', tournament.id, {
+          tournament_name: tournament.name,
+          team_id: team.id,
+          team_name: team.name,
+        });
+      }
 
       await fetchRegisteredTeams();
     } catch (error: any) {
@@ -673,14 +721,23 @@ function TeamManagementModal({ tournament, onClose, onSuccess }: TeamManagementM
     }
   };
 
-  const handleRemoveTeam = async (tournamentTeamId: string) => {
+  const handleRemoveTeam = async (tournamentTeam: any) => {
     try {
       const { error } = await supabase
         .from('tournament_teams')
         .delete()
-        .eq('id', tournamentTeamId);
+        .eq('id', tournamentTeam.id);
 
       if (error) throw error;
+
+      // Log the admin action
+      if (adminId) {
+        await logAdminAction(adminId, 'remove_team_from_tournament', 'tournament', tournament.id, {
+          tournament_name: tournament.name,
+          team_id: tournamentTeam.team?.id,
+          team_name: tournamentTeam.team?.name,
+        });
+      }
 
       await fetchRegisteredTeams();
     } catch (error: any) {
@@ -763,7 +820,7 @@ function TeamManagementModal({ tournament, onClose, onSuccess }: TeamManagementM
                         </p>
                       </div>
                       <button
-                        onClick={() => handleRemoveTeam(tt.id)}
+                        onClick={() => handleRemoveTeam(tt)}
                         className="px-2 py-1 rounded bg-red-600/20 hover:bg-red-600/30 text-red-400 text-xs"
                       >
                         Remove
@@ -817,7 +874,7 @@ function TeamManagementModal({ tournament, onClose, onSuccess }: TeamManagementM
                         </p>
                       </div>
                       <button
-                        onClick={() => handleAddTeam(team.id)}
+                        onClick={() => handleAddTeam(team)}
                         className="px-3 py-1 rounded bg-rally-coral hover:bg-rally-coral/80 text-white text-xs whitespace-nowrap"
                       >
                         Add

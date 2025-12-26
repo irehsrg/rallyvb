@@ -470,3 +470,122 @@ export interface TournamentRegistrationSettings {
   min_team_size: number;
   max_team_size: number;
 }
+
+// ============================================================================
+// MULTI-VENUE SUPPORT TYPES
+// ============================================================================
+
+export type VenueFollowType = 'explicit' | 'auto';
+
+export interface PlayerVenueFollow {
+  id: string;
+  player_id: string;
+  venue_id: string;
+  follow_type: VenueFollowType;
+  created_at: string;
+  // Joined data
+  venue?: Venue;
+  player?: Player;
+}
+
+export interface AdminVenueAssignment {
+  id: string;
+  admin_id: string;
+  venue_id: string;
+  assigned_by?: string;
+  created_at: string;
+  // Joined data
+  venue?: Venue;
+  admin?: Player;
+  assigner?: Player;
+}
+
+// ============================================================================
+// STATISTICS TYPES
+// ============================================================================
+
+export interface GlobalStatistics {
+  totalPlayers: number;
+  totalGames: number;
+  avgPointDifferential: number;
+  closeGamePercentage: number;
+  avgTotalPoints: number;
+}
+
+export interface RatingBucket {
+  bucket: number; // e.g., 1200, 1300, 1400
+  count: number;
+}
+
+export interface PlayerActivity {
+  playerId: string;
+  playerName: string;
+  profilePhotoUrl?: string;
+  gamesLastMonth: number;
+  ratingChange: number;
+  currentRating: number;
+}
+
+export interface RatingTrend {
+  date: string;
+  avgRating: number;
+  gamesPlayed: number;
+}
+
+export interface HeadToHeadStats {
+  player1: Player;
+  player2: Player;
+  player1Wins: number;
+  player2Wins: number;
+  totalGames: number;
+  lastPlayed?: string;
+  recentGames: HeadToHeadGame[];
+}
+
+export interface HeadToHeadGame {
+  gameId: string;
+  date: string;
+  winnerId: string;
+  scoreA: number;
+  scoreB: number;
+  player1Team: 'A' | 'B';
+}
+
+export interface GameOutcomeDistribution {
+  close: number;      // 0-3 point difference
+  moderate: number;   // 4-7 point difference
+  blowout: number;    // 8+ point difference
+}
+
+// ============================================================================
+// OFFLINE SUPPORT TYPES
+// ============================================================================
+
+export type PendingActionType =
+  | 'checkin'
+  | 'checkout'
+  | 'record_score'
+  | 'update_profile'
+  | 'follow_venue'
+  | 'unfollow_venue';
+
+export interface PendingAction {
+  id: string;
+  action: PendingActionType;
+  payload: Record<string, any>;
+  createdAt: number;
+  retryCount: number;
+}
+
+export interface SyncStatus {
+  isOnline: boolean;
+  pendingCount: number;
+  lastSync: number | null;
+  isSyncing: boolean;
+}
+
+export interface CachedData<T> {
+  data: T;
+  cachedAt: number;
+  expiresAt: number;
+}

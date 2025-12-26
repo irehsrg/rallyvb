@@ -12,7 +12,8 @@ import AdminManager from '../components/AdminManager';
 import TeamManager from '../components/TeamManager';
 import TournamentManager from '../components/TournamentManager';
 import PlayerRatingManager from '../components/PlayerRatingManager';
-import { getAdminPermissions, getAdminRoleDisplayName } from '../utils/permissions';
+import AdminVenueAssignments from '../components/AdminVenueAssignments';
+import { getAdminPermissions, getAdminRoleDisplayName, getAssignedVenueIds, isVenueScoped } from '../utils/permissions';
 import { notifySessionCreated, notifyGameResult } from '../utils/notifications';
 
 export default function Admin() {
@@ -48,28 +49,58 @@ export default function Admin() {
   }>>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [selectedVenueId, setSelectedVenueId] = useState<string>('');
+  const [assignedVenueIds, setAssignedVenueIds] = useState<string[]>([]);
+
+  // Edit session state
+  const [showEditSessionModal, setShowEditSessionModal] = useState(false);
+  const [editCourtCount, setEditCourtCount] = useState(2);
+  const [editVenueId, setEditVenueId] = useState<string>('');
+  const [editLocationName, setEditLocationName] = useState('');
+  const [editMaxPlayers, setEditMaxPlayers] = useState<number | ''>('');
+  const [editSessionNotes, setEditSessionNotes] = useState('');
 
   useEffect(() => {
     if (!player?.is_admin) {
       navigate('/');
       return;
     }
-    autoCloseOldSessions();
-    fetchActiveSession();
-    fetchTemplates();
-    fetchActivityLogs();
-    fetchVenues();
+    initializeAdmin();
   }, [player, navigate]);
 
-  const fetchActiveSession = async () => {
+  const initializeAdmin = async () => {
+    autoCloseOldSessions();
+    fetchTemplates();
+    fetchActivityLogs();
+
+    // Fetch venues and assignments first, then fetch sessions
+    await fetchVenues();
+
+    // Fetch assigned venue IDs for venue-scoped admins
+    let assigned: string[] = [];
+    if (player && isVenueScoped(player)) {
+      assigned = await getAssignedVenueIds(player);
+      setAssignedVenueIds(assigned);
+    }
+
+    // Now fetch active session with venue filtering
+    await fetchActiveSessionWithVenues(assigned);
+  };
+
+  const fetchActiveSessionWithVenues = async (assignedIds: string[]) => {
     try {
-      const { data: session } = await supabase
+      let query = supabase
         .from('sessions')
-        .select('*')
+        .select('*, venue:venues(*)')
         .in('status', ['setup', 'active'])
         .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(1);
+
+      // For venue-scoped admins, only show sessions at their assigned venues
+      if (player && isVenueScoped(player) && assignedIds.length > 0) {
+        query = query.in('venue_id', assignedIds);
+      }
+
+      const { data: session } = await query.maybeSingle();
 
       setActiveSession(session);
 
@@ -82,6 +113,10 @@ export default function Admin() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchActiveSession = async () => {
+    await fetchActiveSessionWithVenues(assignedVenueIds);
   };
 
   const fetchCheckins = async (sessionId: string) => {
@@ -454,6 +489,51 @@ export default function Admin() {
     } catch (error: any) {
       console.error('Error cancelling session:', error);
       alert('Failed to cancel session: ' + error.message);
+    }
+  };
+
+  const openEditSessionModal = () => {
+    if (!activeSession) return;
+    setEditCourtCount(activeSession.court_count);
+    setEditVenueId(activeSession.venue_id || '');
+    setEditLocationName(activeSession.location_name || '');
+    setEditMaxPlayers(activeSession.max_players || '');
+    setEditSessionNotes(activeSession.notes || '');
+    setShowEditSessionModal(true);
+  };
+
+  const handleEditSession = async () => {
+    if (!activeSession) return;
+
+    try {
+      const updates: any = {
+        court_count: editCourtCount,
+        venue_id: editVenueId || null,
+        location_name: editLocationName || null,
+        max_players: editMaxPlayers || null,
+        notes: editSessionNotes || null,
+      };
+
+      const { error } = await supabase
+        .from('sessions')
+        .update(updates)
+        .eq('id', activeSession.id);
+
+      if (error) throw error;
+
+      // Log admin action
+      await logAdminAction('edit_session', 'session', activeSession.id, {
+        court_count: editCourtCount,
+        venue_id: editVenueId,
+        max_players: editMaxPlayers,
+      });
+
+      alert('Session updated successfully!');
+      setShowEditSessionModal(false);
+      await fetchActiveSession();
+    } catch (error: any) {
+      console.error('Error updating session:', error);
+      alert('Failed to update session: ' + error.message);
     }
   };
 
@@ -951,7 +1031,9 @@ export default function Admin() {
                   className="input-modern w-full"
                 >
                   <option value="">Select a venue or enter custom location below</option>
-                  {venues.map((venue) => (
+                  {venues
+                    .filter(v => !isVenueScoped(player) || assignedVenueIds.includes(v.id))
+                    .map((venue) => (
                     <option key={venue.id} value={venue.id}>
                       {venue.name} - {venue.address}
                     </option>
@@ -1068,7 +1150,7 @@ export default function Admin() {
               </div>
 
               {/* Action Buttons */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
                 <button
                   onClick={() => setShowQRCode(true)}
                   className="px-4 py-3 bg-rally-dark/50 hover:bg-rally-dark border border-white/10 hover:border-rally-coral/30 text-gray-100 rounded-xl transition-all flex items-center justify-center gap-2"
@@ -1077,6 +1159,15 @@ export default function Admin() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
                   </svg>
                   QR Code
+                </button>
+                <button
+                  onClick={openEditSessionModal}
+                  className="px-4 py-3 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 hover:border-blue-500/50 text-blue-400 rounded-xl transition-all flex items-center justify-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Edit Session
                 </button>
                 {permissions.canCancelSession && (
                   <>
@@ -1290,6 +1381,134 @@ export default function Admin() {
           </div>
         )}
 
+        {/* Edit Session Modal */}
+        {showEditSessionModal && activeSession && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+            <div className="card-glass p-8 max-w-lg w-full animate-slide-up max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold text-gray-100 flex items-center gap-2">
+                  <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Edit Session
+                </h3>
+                <button
+                  onClick={() => setShowEditSessionModal(false)}
+                  className="text-gray-400 hover:text-gray-100 transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Court Count */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Number of Courts
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={editCourtCount}
+                    onChange={(e) => setEditCourtCount(parseInt(e.target.value) || 1)}
+                    className="input-modern w-full"
+                  />
+                </div>
+
+                {/* Venue */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Venue <span className="text-gray-500">(Optional)</span>
+                  </label>
+                  <select
+                    value={editVenueId}
+                    onChange={(e) => {
+                      setEditVenueId(e.target.value);
+                      if (e.target.value) setEditLocationName('');
+                    }}
+                    className="input-modern w-full"
+                  >
+                    <option value="">Select a venue or enter custom location below</option>
+                    {venues
+                      .filter(v => !isVenueScoped(player) || assignedVenueIds.includes(v.id))
+                      .map((venue) => (
+                      <option key={venue.id} value={venue.id}>
+                        {venue.name} - {venue.address}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Custom Location */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Custom Location <span className="text-gray-500">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={editLocationName}
+                    onChange={(e) => {
+                      setEditLocationName(e.target.value);
+                      if (e.target.value) setEditVenueId('');
+                    }}
+                    className="input-modern w-full"
+                    placeholder="e.g. Downtown Gym, Venice Beach Courts"
+                    disabled={!!editVenueId}
+                  />
+                </div>
+
+                {/* Max Players */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Max Players <span className="text-gray-500">(Optional)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={editMaxPlayers}
+                    onChange={(e) => setEditMaxPlayers(e.target.value ? parseInt(e.target.value) : '')}
+                    className="input-modern w-full"
+                    placeholder="No limit"
+                  />
+                </div>
+
+                {/* Notes */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Session Notes <span className="text-gray-500">(Optional)</span>
+                  </label>
+                  <textarea
+                    value={editSessionNotes}
+                    onChange={(e) => setEditSessionNotes(e.target.value)}
+                    className="input-modern w-full"
+                    rows={3}
+                    placeholder="Any special instructions or information..."
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 mt-8">
+                <button
+                  onClick={() => setShowEditSessionModal(false)}
+                  className="btn-secondary flex-1"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleEditSession}
+                  className="btn-primary flex-1"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Save Template Modal */}
         {showTemplateModal && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
@@ -1468,6 +1687,13 @@ export default function Admin() {
         {permissions.canManageVenues && (
           <div className="mt-8 animate-slide-up">
             <VenuesManager />
+          </div>
+        )}
+
+        {/* Venue Assignments (for location admins) */}
+        {permissions.canManageAdmins && (
+          <div className="mt-8 animate-slide-up">
+            <AdminVenueAssignments />
           </div>
         )}
 

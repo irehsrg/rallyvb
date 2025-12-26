@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, logAdminAction } from '../lib/supabase';
 import { Venue } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function VenuesManager() {
+  const { player } = useAuth();
   const [venues, setVenues] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -31,12 +32,21 @@ export default function VenuesManager() {
 
   const handleToggleActive = async (venue: Venue) => {
     try {
+      const newActiveState = !venue.is_active;
       const { error } = await supabase
         .from('venues')
-        .update({ is_active: !venue.is_active })
+        .update({ is_active: newActiveState })
         .eq('id', venue.id);
 
       if (error) throw error;
+
+      // Log the admin action
+      if (player?.id) {
+        await logAdminAction(player.id, newActiveState ? 'activate_venue' : 'deactivate_venue', 'venue', venue.id, {
+          venue_name: venue.name,
+        });
+      }
+
       await fetchVenues();
     } catch (error) {
       console.error('Error toggling venue:', error);
@@ -44,7 +54,7 @@ export default function VenuesManager() {
     }
   };
 
-  const handleDelete = async (venueId: string) => {
+  const handleDelete = async (venue: Venue) => {
     if (!confirm('Are you sure you want to delete this venue? Sessions using this venue will have their venue unset.')) {
       return;
     }
@@ -53,9 +63,18 @@ export default function VenuesManager() {
       const { error } = await supabase
         .from('venues')
         .delete()
-        .eq('id', venueId);
+        .eq('id', venue.id);
 
       if (error) throw error;
+
+      // Log the admin action
+      if (player?.id) {
+        await logAdminAction(player.id, 'delete_venue', 'venue', venue.id, {
+          venue_name: venue.name,
+          venue_address: venue.address,
+        });
+      }
+
       await fetchVenues();
     } catch (error) {
       console.error('Error deleting venue:', error);
@@ -169,7 +188,7 @@ export default function VenuesManager() {
                     {venue.is_active ? 'Deactivate' : 'Activate'}
                   </button>
                   <button
-                    onClick={() => handleDelete(venue.id)}
+                    onClick={() => handleDelete(venue)}
                     className="px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 text-sm transition-all"
                   >
                     Delete
@@ -235,9 +254,17 @@ function VenueFormModal({ venue, onClose, onSuccess }: VenueFormModalProps) {
           .eq('id', venue.id);
 
         if (error) throw error;
+
+        // Log the admin action
+        if (player?.id) {
+          await logAdminAction(player.id, 'update_venue', 'venue', venue.id, {
+            venue_name: name.trim(),
+            previous_name: venue.name,
+          });
+        }
       } else {
         // Create new venue
-        const { error } = await supabase
+        const { data: newVenue, error } = await supabase
           .from('venues')
           .insert({
             name: name.trim(),
@@ -246,9 +273,19 @@ function VenueFormModal({ venue, onClose, onSuccess }: VenueFormModalProps) {
             notes: notes.trim() || null,
             created_by: player?.id,
             is_active: true,
-          });
+          })
+          .select()
+          .single();
 
         if (error) throw error;
+
+        // Log the admin action
+        if (player?.id && newVenue) {
+          await logAdminAction(player.id, 'create_venue', 'venue', newVenue.id, {
+            venue_name: name.trim(),
+            venue_address: address.trim(),
+          });
+        }
       }
 
       onSuccess();

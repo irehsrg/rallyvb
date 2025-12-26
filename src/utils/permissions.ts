@@ -1,4 +1,10 @@
 import { Player, AdminRole } from '../types';
+import { supabase } from '../lib/supabase';
+
+// Cache for admin venue assignments
+let venueAssignmentsCache: Map<string, string[]> = new Map();
+let cacheTimestamp: number = 0;
+const CACHE_TTL = 60000; // 1 minute
 
 export interface AdminPermissions {
   // Session management
@@ -239,7 +245,7 @@ export function getAdminRoleDescription(role: AdminRole): string {
     case 'super_admin':
       return 'Full access to all admin features including settings, venues, and user management';
     case 'location_admin':
-      return 'Can manage active sessions, teams, and game results';
+      return 'Can manage active sessions, teams, and game results at assigned venues';
     case 'scorekeeper':
       return 'Can manage check-ins and record game scores';
     case 'team_manager':
@@ -249,4 +255,114 @@ export function getAdminRoleDescription(role: AdminRole): string {
     default:
       return '';
   }
+}
+
+// ============================================
+// VENUE SCOPING FUNCTIONS
+// ============================================
+
+/**
+ * Get the venue IDs assigned to an admin.
+ * Super admins get all venues, others get only assigned venues.
+ */
+export async function getAssignedVenueIds(player: Player | null): Promise<string[]> {
+  if (!player?.is_admin) {
+    return [];
+  }
+
+  // Super admins can access all venues
+  if (player.admin_role === 'super_admin') {
+    const { data } = await supabase
+      .from('venues')
+      .select('id')
+      .eq('is_active', true);
+    return data?.map(v => v.id) || [];
+  }
+
+  // Check cache first
+  const now = Date.now();
+  if (now - cacheTimestamp < CACHE_TTL && venueAssignmentsCache.has(player.id)) {
+    return venueAssignmentsCache.get(player.id) || [];
+  }
+
+  // Fetch assignments from database
+  const { data, error } = await supabase
+    .from('admin_venue_assignments')
+    .select('venue_id')
+    .eq('admin_id', player.id);
+
+  if (error) {
+    console.error('Error fetching venue assignments:', error);
+    return [];
+  }
+
+  const venueIds = data?.map(a => a.venue_id) || [];
+
+  // Update cache
+  venueAssignmentsCache.set(player.id, venueIds);
+  cacheTimestamp = now;
+
+  return venueIds;
+}
+
+/**
+ * Check if an admin can access a specific venue.
+ * Super admins can access all, others only their assigned venues.
+ */
+export async function canAccessVenue(player: Player | null, venueId: string): Promise<boolean> {
+  if (!player?.is_admin) {
+    return false;
+  }
+
+  // Super admins can access all venues
+  if (player.admin_role === 'super_admin') {
+    return true;
+  }
+
+  const assignedVenues = await getAssignedVenueIds(player);
+  return assignedVenues.includes(venueId);
+}
+
+/**
+ * Check if admin can access a session based on venue.
+ * Returns true if session has no venue or admin has access to the venue.
+ */
+export async function canAccessSession(
+  player: Player | null,
+  sessionVenueId: string | null | undefined
+): Promise<boolean> {
+  if (!player?.is_admin) {
+    return false;
+  }
+
+  // Super admins can access all sessions
+  if (player.admin_role === 'super_admin') {
+    return true;
+  }
+
+  // Sessions without venues can be accessed by any admin
+  if (!sessionVenueId) {
+    return true;
+  }
+
+  return canAccessVenue(player, sessionVenueId);
+}
+
+/**
+ * Clear the venue assignments cache.
+ * Call this after assignments are updated.
+ */
+export function clearVenueAssignmentsCache(): void {
+  venueAssignmentsCache.clear();
+  cacheTimestamp = 0;
+}
+
+/**
+ * Check if admin is venue-scoped (not super_admin).
+ */
+export function isVenueScoped(player: Player | null): boolean {
+  if (!player?.is_admin) {
+    return false;
+  }
+  return player.admin_role !== 'super_admin';
 }

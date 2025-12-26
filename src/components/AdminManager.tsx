@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, logAdminAction } from '../lib/supabase';
 import { Player, AdminRole } from '../types';
 import { getAdminRoleDisplayName, getAdminRoleDescription } from '../utils/permissions';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function AdminManager() {
+  const { player: currentAdmin } = useAuth();
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
@@ -36,6 +38,7 @@ export default function AdminManager() {
     try {
       const isAdmin = selectedRole !== '';
       const adminRole = selectedRole || null;
+      const previousRole = editingPlayer.admin_role;
 
       const { error } = await supabase
         .from('players')
@@ -46,6 +49,17 @@ export default function AdminManager() {
         .eq('id', editingPlayer.id);
 
       if (error) throw error;
+
+      // Log the admin action
+      if (currentAdmin?.id) {
+        await logAdminAction(currentAdmin.id, 'change_admin_role', 'player', editingPlayer.id, {
+          player_name: editingPlayer.name,
+          previous_role: previousRole || 'none',
+          new_role: adminRole || 'none',
+          is_promotion: !previousRole && adminRole,
+          is_demotion: previousRole && !adminRole,
+        });
+      }
 
       await fetchPlayers();
       setEditingPlayer(null);
