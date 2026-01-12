@@ -21,6 +21,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@supabase/supabase-js": "^2.89.0",
+    "html2canvas": "^1.4.1",
     "idb": "^8.0.3",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.3",

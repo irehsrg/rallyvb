@@ -1,3 +1,5 @@
+import { useRef, useState } from 'react';
+import html2canvas from 'html2canvas';
 import { Team, TournamentGame, Tournament } from '../types';
 
 interface BracketMatch {
@@ -19,11 +21,78 @@ interface TournamentBracketProps {
 }
 
 export default function TournamentBracket({ tournament, teams, matches }: TournamentBracketProps) {
-  if (tournament.format === 'round_robin') {
-    return <RoundRobinView teams={teams} matches={matches} />;
-  }
+  const bracketRef = useRef<HTMLDivElement>(null);
+  const [downloading, setDownloading] = useState(false);
 
-  return <EliminationBracket teams={teams} matches={matches} />;
+  const handleDownloadPNG = async () => {
+    if (!bracketRef.current) return;
+
+    setDownloading(true);
+    try {
+      const canvas = await html2canvas(bracketRef.current, {
+        backgroundColor: '#1a1a2e', // rally-darker background
+        scale: 2, // Higher resolution
+        logging: false,
+        useCORS: true,
+      });
+
+      const link = document.createElement('a');
+      link.download = `${tournament.name.replace(/[^a-z0-9]/gi, '_')}_bracket.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch (error) {
+      console.error('Error generating bracket image:', error);
+      alert('Failed to generate bracket image');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Download Button */}
+      <div className="flex justify-end">
+        <button
+          onClick={handleDownloadPNG}
+          disabled={downloading}
+          className="flex items-center gap-2 px-4 py-2 bg-rally-dark hover:bg-rally-light border border-white/10 hover:border-white/20 rounded-lg text-gray-200 transition-all disabled:opacity-50"
+        >
+          {downloading ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-gray-200"></div>
+              <span>Generating...</span>
+            </>
+          ) : (
+            <>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              <span>Download PNG</span>
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Bracket Content */}
+      <div ref={bracketRef} className="p-4 bg-rally-darker rounded-xl">
+        {/* Tournament Header */}
+        <div className="text-center mb-6 pb-4 border-b border-white/10">
+          <h2 className="text-2xl font-bold text-gray-100">{tournament.name}</h2>
+          <p className="text-gray-400 text-sm mt-1">
+            {tournament.format === 'round_robin' ? 'Round Robin' :
+             tournament.format === 'single_elimination' ? 'Single Elimination' : 'Double Elimination'}
+            {tournament.start_date && ` • ${new Date(tournament.start_date).toLocaleDateString()}`}
+          </p>
+        </div>
+
+        {tournament.format === 'round_robin' ? (
+          <RoundRobinView teams={teams} matches={matches} />
+        ) : (
+          <EliminationBracket teams={teams} matches={matches} />
+        )}
+      </div>
+    </div>
+  );
 }
 
 function EliminationBracket({ teams, matches }: { teams: Team[]; matches: TournamentGame[] }) {
