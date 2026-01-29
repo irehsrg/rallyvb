@@ -346,6 +346,12 @@ export interface Tournament {
   points_to_win: number;
   deciding_set_points: number;
   min_point_difference: number;
+  // Season scheduling fields
+  season_weeks?: number; // Duration of regular season in weeks
+  games_per_week?: number; // Games per team per week
+  schedule_generated?: boolean; // Whether schedule has been generated
+  playoffs_enabled?: boolean; // Whether to have playoffs after season
+  auto_seed_playoffs?: boolean; // Use standings for playoff seeding (vs manual)
   // Joined data
   venue?: Venue;
   teams?: TournamentTeam[];

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase, logAdminAction } from '../lib/supabase';
 import { Tournament, TournamentFormat, TournamentStatus, Venue, Team, TournamentTeam } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { generateSeasonSchedule, generatePlayoffBracket } from '../utils/schedule';
 
 export default function TournamentManager() {
   const { player } = useAuth();
@@ -85,6 +86,83 @@ export default function TournamentManager() {
     } catch (error: any) {
       console.error('Error updating tournament status:', error);
       alert('Failed to update status: ' + error.message);
+    }
+  };
+
+  const handleGenerateSchedule = async (tournament: Tournament) => {
+    if (!tournament.teams || tournament.teams.length < 2) {
+      alert('Need at least 2 teams to generate schedule');
+      return;
+    }
+
+    const seasonWeeks = tournament.season_weeks || 8;
+    const gamesPerWeek = tournament.games_per_week || 1;
+
+    if (!confirm(`Generate schedule for ${tournament.teams.length} teams over ${seasonWeeks} weeks (${gamesPerWeek} game(s)/week per team)?`)) {
+      return;
+    }
+
+    try {
+      const teams = tournament.teams.map((tt: any) => ({
+        team_id: tt.team?.id || tt.team_id,
+        team_name: tt.team?.name || 'Unknown',
+      }));
+
+      const result = await generateSeasonSchedule(
+        tournament.id,
+        teams,
+        seasonWeeks,
+        gamesPerWeek,
+        tournament.start_date
+      );
+
+      if (result.success) {
+        // Log the admin action
+        if (player?.id) {
+          await logAdminAction(player.id, 'generate_schedule', 'tournament', tournament.id, {
+            tournament_name: tournament.name,
+            teams_count: teams.length,
+            games_created: result.gamesCreated,
+          });
+        }
+
+        await fetchTournaments();
+        alert(`Schedule generated! ${result.gamesCreated} games created.`);
+      } else {
+        alert('Failed to generate schedule: ' + result.error);
+      }
+    } catch (error: any) {
+      console.error('Error generating schedule:', error);
+      alert('Failed to generate schedule: ' + error.message);
+    }
+  };
+
+  const handleGeneratePlayoffs = async (tournament: Tournament) => {
+    const playoffTeams = Math.min(tournament.teams?.length || 0, 8);
+
+    if (!confirm(`Generate playoff bracket with top ${playoffTeams} teams based on season standings?`)) {
+      return;
+    }
+
+    try {
+      const result = await generatePlayoffBracket(tournament.id, playoffTeams);
+
+      if (result.success) {
+        if (player?.id) {
+          await logAdminAction(player.id, 'generate_playoffs', 'tournament', tournament.id, {
+            tournament_name: tournament.name,
+            playoff_teams: playoffTeams,
+          });
+        }
+
+        await fetchTournaments();
+        alert('Playoff bracket generated!');
+      } else {
+        alert('Failed to generate playoffs: ' + result.error);
+      }
+    } catch (error: any) {
+      console.error('Error generating playoffs:', error);
+      alert('Failed to generate playoffs: ' + error.message);
     }
   };
 
@@ -225,16 +303,34 @@ export default function TournamentManager() {
                   </button>
 
                   {tournament.status === 'setup' && (
-                    <button
-                      onClick={() => handleUpdateStatus(tournament, 'active')}
-                      className="px-3 py-1.5 rounded-lg bg-green-600/20 hover:bg-green-600/30 text-green-400 text-sm transition-all whitespace-nowrap"
-                    >
-                      Start Tournament
-                    </button>
+                    <>
+                      {!tournament.schedule_generated && tournament.season_weeks && (
+                        <button
+                          onClick={() => handleGenerateSchedule(tournament)}
+                          className="px-3 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 text-sm transition-all whitespace-nowrap"
+                        >
+                          Generate Schedule
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleUpdateStatus(tournament, 'active')}
+                        className="px-3 py-1.5 rounded-lg bg-green-600/20 hover:bg-green-600/30 text-green-400 text-sm transition-all whitespace-nowrap"
+                      >
+                        Start Tournament
+                      </button>
+                    </>
                   )}
 
                   {tournament.status === 'active' && (
                     <>
+                      {tournament.playoffs_enabled && (
+                        <button
+                          onClick={() => handleGeneratePlayoffs(tournament)}
+                          className="px-3 py-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 text-sm transition-all whitespace-nowrap"
+                        >
+                          Generate Playoffs
+                        </button>
+                      )}
                       <button
                         onClick={() => handleUpdateStatus(tournament, 'completed')}
                         className="px-3 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 text-sm transition-all whitespace-nowrap"
@@ -329,7 +425,7 @@ interface TournamentFormModalProps {
 function TournamentFormModal({ tournament, venues, adminId, onClose, onSuccess }: TournamentFormModalProps) {
   const [name, setName] = useState(tournament?.name || '');
   const [description, setDescription] = useState(tournament?.description || '');
-  const [format, setFormat] = useState<TournamentFormat>(tournament?.format || 'single_elimination');
+  const [format, setFormat] = useState<TournamentFormat>(tournament?.format || 'round_robin');
   const [bestOf, setBestOf] = useState<1 | 3 | 5 | 7>(tournament?.best_of || 3);
   const [startDate, setStartDate] = useState(
     tournament?.start_date ? new Date(tournament.start_date).toISOString().split('T')[0] : ''
@@ -342,6 +438,11 @@ function TournamentFormModal({ tournament, venues, adminId, onClose, onSuccess }
   const [pointsToWin, setPointsToWin] = useState(tournament?.points_to_win || 25);
   const [decidingSetPoints, setDecidingSetPoints] = useState(tournament?.deciding_set_points || 15);
   const [minPointDifference, setMinPointDifference] = useState(tournament?.min_point_difference || 2);
+  // Season scheduling
+  const [seasonWeeks, setSeasonWeeks] = useState<number | ''>(tournament?.season_weeks || 8);
+  const [gamesPerWeek, setGamesPerWeek] = useState<number | ''>(tournament?.games_per_week || 1);
+  const [playoffsEnabled, setPlayoffsEnabled] = useState(tournament?.playoffs_enabled ?? true);
+  const [autoSeedPlayoffs, setAutoSeedPlayoffs] = useState(tournament?.auto_seed_playoffs ?? true);
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -369,6 +470,11 @@ function TournamentFormModal({ tournament, venues, adminId, onClose, onSuccess }
         points_to_win: pointsToWin,
         deciding_set_points: decidingSetPoints,
         min_point_difference: minPointDifference,
+        // Season scheduling
+        season_weeks: seasonWeeks || null,
+        games_per_week: gamesPerWeek || null,
+        playoffs_enabled: playoffsEnabled,
+        auto_seed_playoffs: autoSeedPlayoffs,
       };
 
       if (tournament) {
@@ -566,6 +672,63 @@ function TournamentFormModal({ tournament, venues, adminId, onClose, onSuccess }
                 placeholder="Unlimited"
                 min={2}
               />
+            </div>
+          </div>
+
+          {/* Season Scheduling */}
+          <div className="p-4 bg-rally-dark/50 rounded-xl">
+            <h3 className="text-sm font-semibold text-gray-300 mb-3">Season Schedule</h3>
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">
+                  Season Length (weeks)
+                </label>
+                <input
+                  type="number"
+                  value={seasonWeeks}
+                  onChange={(e) => setSeasonWeeks(e.target.value ? Number(e.target.value) : '')}
+                  className="input-modern w-full text-sm"
+                  min={1}
+                  max={52}
+                  placeholder="8"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">
+                  Games per Week (per team)
+                </label>
+                <input
+                  type="number"
+                  value={gamesPerWeek}
+                  onChange={(e) => setGamesPerWeek(e.target.value ? Number(e.target.value) : '')}
+                  className="input-modern w-full text-sm"
+                  min={1}
+                  max={7}
+                  placeholder="1"
+                />
+              </div>
+            </div>
+            <div className="space-y-3">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={playoffsEnabled}
+                  onChange={(e) => setPlayoffsEnabled(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-600 text-rally-coral focus:ring-rally-coral"
+                />
+                <span className="text-sm text-gray-300">Enable playoffs after regular season</span>
+              </label>
+              {playoffsEnabled && (
+                <label className="flex items-center gap-3 cursor-pointer ml-7">
+                  <input
+                    type="checkbox"
+                    checked={autoSeedPlayoffs}
+                    onChange={(e) => setAutoSeedPlayoffs(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-600 text-rally-coral focus:ring-rally-coral"
+                  />
+                  <span className="text-sm text-gray-400">Auto-seed playoffs by season standings</span>
+                </label>
+              )}
             </div>
           </div>
 

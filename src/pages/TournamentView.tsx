@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Tournament, Team, TournamentGame, Venue } from '../types';
 import TournamentBracket from '../components/TournamentBracket';
+import TournamentSchedule from '../components/TournamentSchedule';
 
 interface TournamentWithVenue extends Tournament {
   venue?: Venue;
@@ -217,14 +218,14 @@ export default function TournamentView() {
           )}
         </div>
 
-        {/* Bracket / Standings */}
+        {/* Schedule / Bracket / Standings */}
         {tournament.status === 'setup' ? (
           <div className="card-glass p-12 text-center">
             <svg className="w-16 h-16 mx-auto mb-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <h3 className="text-xl font-semibold text-gray-300 mb-2">Tournament Not Started</h3>
-            <p className="text-gray-500">The bracket will be available once the tournament begins</p>
+            <p className="text-gray-500">The schedule and bracket will be available once the tournament begins</p>
             <div className="mt-6">
               <h4 className="font-semibold text-gray-300 mb-3">Registered Teams</h4>
               <div className="flex flex-wrap justify-center gap-2">
@@ -241,8 +242,24 @@ export default function TournamentView() {
             </div>
           </div>
         ) : (
-          <div className="animate-slide-up">
-            <TournamentBracket tournament={tournament} teams={teams} matches={matches} />
+          <div className="space-y-8 animate-slide-up">
+            {/* Season Schedule */}
+            {tournament.season_weeks && (
+              <div className="card-glass p-6">
+                <h3 className="text-xl font-bold text-gray-100 mb-4">Season Schedule</h3>
+                <TournamentSchedule tournament={tournament} teams={teams} />
+              </div>
+            )}
+
+            {/* Bracket (for playoffs or single elimination) */}
+            {(tournament.playoffs_enabled || tournament.format === 'single_elimination') && (
+              <div className="card-glass p-6">
+                <h3 className="text-xl font-bold text-gray-100 mb-4">
+                  {tournament.playoffs_enabled ? 'Playoff Bracket' : 'Tournament Bracket'}
+                </h3>
+                <TournamentBracket tournament={tournament} teams={teams} matches={matches} />
+              </div>
+            )}
           </div>
         )}
       </div>
