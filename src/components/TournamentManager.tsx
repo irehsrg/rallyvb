@@ -113,7 +113,12 @@ export default function TournamentManager() {
         teams,
         seasonWeeks,
         gamesPerWeek,
-        tournament.start_date
+        tournament.start_date,
+        {
+          firstGameTime: tournament.first_game_time || '18:00',
+          gameDurationMinutes: tournament.game_duration_minutes || 45,
+          courtsAvailable: tournament.courts_available || 2,
+        }
       );
 
       if (result.success) {
@@ -443,6 +448,10 @@ function TournamentFormModal({ tournament, venues, adminId, onClose, onSuccess }
   const [gamesPerWeek, setGamesPerWeek] = useState<number | ''>(tournament?.games_per_week || 1);
   const [playoffsEnabled, setPlayoffsEnabled] = useState(tournament?.playoffs_enabled ?? true);
   const [autoSeedPlayoffs, setAutoSeedPlayoffs] = useState(tournament?.auto_seed_playoffs ?? true);
+  // Time scheduling
+  const [gameDuration, setGameDuration] = useState<number | ''>(tournament?.game_duration_minutes || 45);
+  const [firstGameTime, setFirstGameTime] = useState(tournament?.first_game_time || '18:00');
+  const [courtsAvailable, setCourtsAvailable] = useState<number | ''>(tournament?.courts_available || 2);
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -475,6 +484,10 @@ function TournamentFormModal({ tournament, venues, adminId, onClose, onSuccess }
         games_per_week: gamesPerWeek || null,
         playoffs_enabled: playoffsEnabled,
         auto_seed_playoffs: autoSeedPlayoffs,
+        // Time scheduling
+        game_duration_minutes: gameDuration || null,
+        first_game_time: firstGameTime || null,
+        courts_available: courtsAvailable || null,
       };
 
       if (tournament) {
@@ -729,6 +742,52 @@ function TournamentFormModal({ tournament, venues, adminId, onClose, onSuccess }
                   <span className="text-sm text-gray-400">Auto-seed playoffs by season standings</span>
                 </label>
               )}
+            </div>
+          </div>
+
+          {/* Time Scheduling */}
+          <div className="p-4 bg-rally-dark/50 rounded-xl">
+            <h3 className="text-sm font-semibold text-gray-300 mb-3">Game Times</h3>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">
+                  First Game Time
+                </label>
+                <input
+                  type="time"
+                  value={firstGameTime}
+                  onChange={(e) => setFirstGameTime(e.target.value)}
+                  className="input-modern w-full text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">
+                  Game Duration (min)
+                </label>
+                <input
+                  type="number"
+                  value={gameDuration}
+                  onChange={(e) => setGameDuration(e.target.value ? Number(e.target.value) : '')}
+                  className="input-modern w-full text-sm"
+                  min={15}
+                  max={120}
+                  placeholder="45"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">
+                  Courts Available
+                </label>
+                <input
+                  type="number"
+                  value={courtsAvailable}
+                  onChange={(e) => setCourtsAvailable(e.target.value ? Number(e.target.value) : '')}
+                  className="input-modern w-full text-sm"
+                  min={1}
+                  max={10}
+                  placeholder="2"
+                />
+              </div>
             </div>
           </div>
 

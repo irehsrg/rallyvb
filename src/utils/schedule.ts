@@ -6,6 +6,7 @@ interface ScheduledGame {
   team_b_id: string;
   week_number: number;
   scheduled_date?: string;
+  scheduled_time?: string; // e.g., "17:45"
   match_round: string;
   court_number: number;
   status: 'pending' | 'in_progress' | 'completed';
@@ -14,6 +15,12 @@ interface ScheduledGame {
 interface TeamInfo {
   team_id: string;
   team_name: string;
+}
+
+interface TimeSlotConfig {
+  firstGameTime?: string; // e.g., "17:45"
+  gameDurationMinutes?: number; // e.g., 45
+  courtsAvailable?: number; // e.g., 2
 }
 
 /**
@@ -25,7 +32,8 @@ export async function generateSeasonSchedule(
   teams: TeamInfo[],
   seasonWeeks: number,
   gamesPerWeek: number,
-  startDate: string
+  startDate: string,
+  timeConfig?: TimeSlotConfig
 ): Promise<{ success: boolean; error?: string; gamesCreated?: number }> {
   try {
     if (teams.length < 2) {
@@ -59,7 +67,6 @@ export async function generateSeasonSchedule(
       const teamGamesThisWeek = new Map<string, number>();
 
       // Schedule games for this week
-      let courtNumber = 1;
       const weekMatchups = [];
 
       // First pass: find valid matchups for this week
@@ -76,16 +83,26 @@ export async function generateSeasonSchedule(
         }
       }
 
-      // Add games for this week
-      for (const { matchup } of weekMatchups) {
+      // Add games for this week with time slots
+      const courts = timeConfig?.courtsAvailable || 1;
+      const gameDuration = timeConfig?.gameDurationMinutes || 45;
+      const firstTime = timeConfig?.firstGameTime || '18:00';
+
+      for (let i = 0; i < weekMatchups.length; i++) {
+        const { matchup } = weekMatchups[i];
+        const courtNum = (i % courts) + 1;
+        const timeSlotIndex = Math.floor(i / courts);
+        const gameTime = addMinutesToTime(firstTime, timeSlotIndex * gameDuration);
+
         scheduledGames.push({
           tournament_id: tournamentId,
           team_a_id: matchup.teamA.team_id,
           team_b_id: matchup.teamB.team_id,
           week_number: week,
           scheduled_date: weekDateStr,
+          scheduled_time: gameTime,
           match_round: `week_${week}`,
-          court_number: courtNumber++,
+          court_number: courtNum,
           status: 'pending',
         });
         gameNumber++;
@@ -100,6 +117,10 @@ export async function generateSeasonSchedule(
 
     // If we still have matchups left, distribute them in additional weeks
     let extraWeek = seasonWeeks + 1;
+    const courts = timeConfig?.courtsAvailable || 1;
+    const gameDuration = timeConfig?.gameDurationMinutes || 45;
+    const firstTime = timeConfig?.firstGameTime || '18:00';
+
     while (allMatchups.length > 0) {
       const weekDate = new Date(startDateObj);
       weekDate.setDate(weekDate.getDate() + (extraWeek - 1) * 7);
@@ -114,14 +135,20 @@ export async function generateSeasonSchedule(
         const teamBGames = teamGamesThisWeek.get(matchup.teamB.team_id) || 0;
 
         if (teamAGames < gamesPerWeek && teamBGames < gamesPerWeek) {
+          const gameIndex = weekMatchups.length;
+          const courtNum = (gameIndex % courts) + 1;
+          const timeSlotIndex = Math.floor(gameIndex / courts);
+          const gameTime = addMinutesToTime(firstTime, timeSlotIndex * gameDuration);
+
           scheduledGames.push({
             tournament_id: tournamentId,
             team_a_id: matchup.teamA.team_id,
             team_b_id: matchup.teamB.team_id,
             week_number: extraWeek,
             scheduled_date: weekDateStr,
+            scheduled_time: gameTime,
             match_round: `week_${extraWeek}`,
-            court_number: weekMatchups.length + 1,
+            court_number: courtNum,
             status: 'pending',
           });
           weekMatchups.push(matchup);
@@ -358,4 +385,25 @@ function getRoundName(roundIndex: number, totalRounds: number): string {
   if (fromEnd === 2) return 'semifinals';
   if (fromEnd === 3) return 'quarterfinals';
   return `round_${roundIndex + 1}`;
+}
+
+/**
+ * Add minutes to a time string (HH:MM format)
+ */
+function addMinutesToTime(time: string, minutes: number): string {
+  const [hours, mins] = time.split(':').map(Number);
+  const totalMinutes = hours * 60 + mins + minutes;
+  const newHours = Math.floor(totalMinutes / 60) % 24;
+  const newMins = totalMinutes % 60;
+  return `${newHours.toString().padStart(2, '0')}:${newMins.toString().padStart(2, '0')}`;
+}
+
+/**
+ * Format time for display (e.g., "17:45" -> "5:45 PM")
+ */
+export function formatTime(time: string): string {
+  const [hours, mins] = time.split(':').map(Number);
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const displayHours = hours % 12 || 12;
+  return `${displayHours}:${mins.toString().padStart(2, '0')} ${period}`;
 }

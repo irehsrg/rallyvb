@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from 'react';
 import html2canvas from 'html2canvas';
 import { supabase } from '../lib/supabase';
 import { Tournament, Team } from '../types';
+import { formatTime } from '../utils/schedule';
 
 interface ScheduledGame {
   id: string;
@@ -9,7 +10,9 @@ interface ScheduledGame {
   team_b_id: string;
   week_number: number;
   scheduled_date: string;
+  scheduled_time?: string;
   match_round: string;
+  court_number: number;
   status: string;
   score_a?: number;
   score_b?: number;
@@ -168,10 +171,21 @@ export default function TournamentSchedule({ tournament, teams }: TournamentSche
                   {weekGames.map(game => (
                     <div
                       key={game.id}
-                      className={`px-4 py-3 flex items-center justify-between ${
+                      className={`px-4 py-3 flex items-center gap-4 ${
                         game.status === 'completed' ? 'bg-rally-dark/20' : ''
                       }`}
                     >
+                      {/* Time & Court */}
+                      <div className="w-24 flex-shrink-0">
+                        {game.scheduled_time && (
+                          <div className="text-sm font-medium text-rally-coral">
+                            {formatTime(game.scheduled_time)}
+                          </div>
+                        )}
+                        <div className="text-xs text-gray-500">Court {game.court_number}</div>
+                      </div>
+
+                      {/* Matchup */}
                       <div className="flex items-center gap-4 flex-1">
                         <div className="flex-1 text-right">
                           <span className={`font-medium ${
@@ -200,11 +214,14 @@ export default function TournamentSchedule({ tournament, teams }: TournamentSche
                         </div>
                       </div>
 
-                      {game.status === 'completed' && (
-                        <span className="ml-4 px-2 py-0.5 text-xs bg-green-500/20 text-green-400 rounded">
-                          Final
-                        </span>
-                      )}
+                      {/* Status */}
+                      <div className="w-16 text-right">
+                        {game.status === 'completed' && (
+                          <span className="px-2 py-0.5 text-xs bg-green-500/20 text-green-400 rounded">
+                            Final
+                          </span>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

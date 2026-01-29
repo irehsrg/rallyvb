@@ -352,6 +352,10 @@ export interface Tournament {
   schedule_generated?: boolean; // Whether schedule has been generated
   playoffs_enabled?: boolean; // Whether to have playoffs after season
   auto_seed_playoffs?: boolean; // Use standings for playoff seeding (vs manual)
+  // Time scheduling
+  game_duration_minutes?: number; // Duration of each game (e.g., 45)
+  first_game_time?: string; // Start time for first game (e.g., "17:45")
+  courts_available?: number; // Number of courts for simultaneous games
   // Joined data
   venue?: Venue;
   teams?: TournamentTeam[];
