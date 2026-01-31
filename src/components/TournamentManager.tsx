@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase, logAdminAction } from '../lib/supabase';
 import { Tournament, TournamentFormat, TournamentStatus, Venue, Team, TournamentTeam } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -116,6 +117,7 @@ export default function TournamentManager() {
         tournament.start_date,
         {
           firstGameTime: tournament.first_game_time || '18:00',
+          lastGameTime: tournament.last_game_time || undefined,
           gameDurationMinutes: tournament.game_duration_minutes || 45,
           courtsAvailable: tournament.courts_available || 2,
         }
@@ -385,8 +387,8 @@ export default function TournamentManager() {
 
     </div>
 
-    {/* Create/Edit Tournament Modal - Outside card-glass for proper z-index */}
-    {(showCreateModal || editingTournament) && (
+    {/* Create/Edit Tournament Modal - Portaled to body to escape overflow constraints */}
+    {(showCreateModal || editingTournament) && createPortal(
       <TournamentFormModal
         tournament={editingTournament}
         venues={venues}
@@ -400,11 +402,12 @@ export default function TournamentManager() {
           setEditingTournament(null);
           fetchTournaments();
         }}
-      />
+      />,
+      document.body
     )}
 
-    {/* Team Management Modal - Outside card-glass for proper z-index */}
-    {managingTeams && (
+    {/* Team Management Modal - Portaled to body to escape overflow constraints */}
+    {managingTeams && createPortal(
       <TeamManagementModal
         tournament={managingTeams}
         adminId={player?.id}
@@ -413,7 +416,8 @@ export default function TournamentManager() {
           setManagingTeams(null);
           fetchTournaments();
         }}
-      />
+      />,
+      document.body
     )}
     </>
   );
@@ -451,8 +455,19 @@ function TournamentFormModal({ tournament, venues, adminId, onClose, onSuccess }
   // Time scheduling
   const [gameDuration, setGameDuration] = useState<number | ''>(tournament?.game_duration_minutes || 45);
   const [firstGameTime, setFirstGameTime] = useState(tournament?.first_game_time || '18:00');
+  const [lastGameTime, setLastGameTime] = useState(tournament?.last_game_time || '');
   const [courtsAvailable, setCourtsAvailable] = useState<number | ''>(tournament?.courts_available || 2);
   const [saving, setSaving] = useState(false);
+
+  // Calculate total games per week from time slots
+  const calculateTotalGamesPerWeek = (first: string, last: string, duration: number, courts: number): number => {
+    const [firstHours, firstMins] = first.split(':').map(Number);
+    const [lastHours, lastMins] = last.split(':').map(Number);
+    const firstTotalMins = firstHours * 60 + firstMins;
+    const lastTotalMins = lastHours * 60 + lastMins;
+    const timeSlots = Math.floor((lastTotalMins - firstTotalMins) / duration) + 1;
+    return timeSlots * courts;
+  };
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -487,6 +502,7 @@ function TournamentFormModal({ tournament, venues, adminId, onClose, onSuccess }
         // Time scheduling
         game_duration_minutes: gameDuration || null,
         first_game_time: firstGameTime || null,
+        last_game_time: lastGameTime || null,
         courts_available: courtsAvailable || null,
       };
 
@@ -635,7 +651,16 @@ function TournamentFormModal({ tournament, venues, adminId, onClose, onSuccess }
               <input
                 type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  // Auto-calculate weeks if end date is set
+                  if (endDate && e.target.value) {
+                    const start = new Date(e.target.value);
+                    const end = new Date(endDate);
+                    const weeks = Math.ceil((end.getTime() - start.getTime()) / (7 * 24 * 60 * 60 * 1000));
+                    if (weeks > 0) setSeasonWeeks(weeks);
+                  }
+                }}
                 className="input-modern w-full"
               />
             </div>
@@ -647,9 +672,23 @@ function TournamentFormModal({ tournament, venues, adminId, onClose, onSuccess }
               <input
                 type="date"
                 value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
+                onChange={(e) => {
+                  setEndDate(e.target.value);
+                  // Auto-calculate weeks from start date
+                  if (startDate && e.target.value) {
+                    const start = new Date(startDate);
+                    const end = new Date(e.target.value);
+                    const weeks = Math.ceil((end.getTime() - start.getTime()) / (7 * 24 * 60 * 60 * 1000));
+                    if (weeks > 0) setSeasonWeeks(weeks);
+                  }
+                }}
                 className="input-modern w-full"
               />
+              {startDate && endDate && (
+                <div className="text-xs text-gray-500 mt-1">
+                  {Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (7 * 24 * 60 * 60 * 1000))} weeks
+                </div>
+              )}
             </div>
           </div>
 
@@ -748,7 +787,7 @@ function TournamentFormModal({ tournament, venues, adminId, onClose, onSuccess }
           {/* Time Scheduling */}
           <div className="p-4 bg-rally-dark/50 rounded-xl">
             <h3 className="text-sm font-semibold text-gray-300 mb-3">Game Times</h3>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-4 mb-3">
               <div>
                 <label className="block text-xs text-gray-400 mb-1">
                   First Game Time
@@ -760,6 +799,20 @@ function TournamentFormModal({ tournament, venues, adminId, onClose, onSuccess }
                   className="input-modern w-full text-sm"
                 />
               </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">
+                  Last Game Time
+                </label>
+                <input
+                  type="time"
+                  value={lastGameTime}
+                  onChange={(e) => setLastGameTime(e.target.value)}
+                  className="input-modern w-full text-sm"
+                  placeholder="Optional"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs text-gray-400 mb-1">
                   Game Duration (min)
@@ -789,6 +842,15 @@ function TournamentFormModal({ tournament, venues, adminId, onClose, onSuccess }
                 />
               </div>
             </div>
+            {firstGameTime && lastGameTime && gameDuration && courtsAvailable && (
+              <div className="mt-3 p-2 bg-rally-darker rounded-lg">
+                <div className="text-xs text-gray-400">
+                  Calculated: <span className="text-rally-coral font-medium">
+                    {calculateTotalGamesPerWeek(firstGameTime, lastGameTime, Number(gameDuration), Number(courtsAvailable))} games/week
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Scoring Rules */}

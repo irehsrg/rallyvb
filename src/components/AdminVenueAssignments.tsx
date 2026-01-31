@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase, logAdminAction } from '../lib/supabase';
 import { Player, Venue, AdminVenueAssignment } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -227,8 +228,8 @@ export default function AdminVenueAssignments() {
         </div>
       )}
 
-      {/* Assign Venue Modal */}
-      {showAssignModal && selectedAdmin && (
+      {/* Assign Venue Modal - Portaled to body */}
+      {showAssignModal && selectedAdmin && createPortal(
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="card-glass p-6 max-w-md w-full">
             <div className="flex items-center justify-between mb-6">
@@ -278,7 +279,8 @@ export default function AdminVenueAssignments() {
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

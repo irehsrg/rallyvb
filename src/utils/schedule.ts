@@ -19,6 +19,7 @@ interface TeamInfo {
 
 interface TimeSlotConfig {
   firstGameTime?: string; // e.g., "17:45"
+  lastGameTime?: string; // e.g., "20:00" - if provided, calculates total games per week
   gameDurationMinutes?: number; // e.g., 45
   courtsAvailable?: number; // e.g., 2
 }
@@ -26,6 +27,7 @@ interface TimeSlotConfig {
 /**
  * Generate a season schedule for a tournament
  * Uses round-robin format spread across the specified weeks
+ * Fills time slots consistently each week (allows double headers)
  */
 export async function generateSeasonSchedule(
   tournamentId: string,
@@ -40,6 +42,19 @@ export async function generateSeasonSchedule(
       return { success: false, error: 'Need at least 2 teams to generate schedule' };
     }
 
+    const courts = timeConfig?.courtsAvailable || 1;
+    const gameDuration = timeConfig?.gameDurationMinutes || 45;
+    const firstTime = timeConfig?.firstGameTime || '18:00';
+
+    // Calculate total games per week based on time slots if lastGameTime provided
+    let totalGamesPerWeek = gamesPerWeek;
+    if (timeConfig?.lastGameTime) {
+      const firstMins = timeToMinutes(firstTime);
+      const lastMins = timeToMinutes(timeConfig.lastGameTime);
+      const timeSlots = Math.floor((lastMins - firstMins) / gameDuration) + 1;
+      totalGamesPerWeek = timeSlots * courts;
+    }
+
     // Generate all round-robin matchups
     const allMatchups: { teamA: TeamInfo; teamB: TeamInfo }[] = [];
     for (let i = 0; i < teams.length; i++) {
@@ -48,53 +63,58 @@ export async function generateSeasonSchedule(
       }
     }
 
-    // Shuffle matchups for variety
-    shuffleArray(allMatchups);
+    // If we need more games than unique matchups, we'll repeat some
+    // Create a pool that can be refilled
+    let matchupPool = [...allMatchups];
+    shuffleArray(matchupPool);
 
-    // Distribute games across weeks
     const scheduledGames: ScheduledGame[] = [];
     const startDateObj = new Date(startDate);
-    let matchupIndex = 0;
-    let gameNumber = 1;
 
-    for (let week = 1; week <= seasonWeeks && matchupIndex < allMatchups.length; week++) {
-      // Calculate the date for this week
+    for (let week = 1; week <= seasonWeeks; week++) {
       const weekDate = new Date(startDateObj);
       weekDate.setDate(weekDate.getDate() + (week - 1) * 7);
       const weekDateStr = weekDate.toISOString().split('T')[0];
 
-      // Track games per team this week to respect gamesPerWeek limit
+      // Track games per team this week for fair distribution
       const teamGamesThisWeek = new Map<string, number>();
+      const weekGames: ScheduledGame[] = [];
 
-      // Schedule games for this week
-      const weekMatchups = [];
+      // Fill all time slots for this week
+      for (let slot = 0; slot < totalGamesPerWeek; slot++) {
+        // Find the best matchup (prioritize teams with fewer games this week)
+        let bestMatchupIdx = -1;
+        let bestScore = Infinity;
 
-      // First pass: find valid matchups for this week
-      for (let i = matchupIndex; i < allMatchups.length && weekMatchups.length < gamesPerWeek * (teams.length / 2); i++) {
-        const matchup = allMatchups[i];
-        const teamAGames = teamGamesThisWeek.get(matchup.teamA.team_id) || 0;
-        const teamBGames = teamGamesThisWeek.get(matchup.teamB.team_id) || 0;
+        for (let i = 0; i < matchupPool.length; i++) {
+          const matchup = matchupPool[i];
+          const teamAGames = teamGamesThisWeek.get(matchup.teamA.team_id) || 0;
+          const teamBGames = teamGamesThisWeek.get(matchup.teamB.team_id) || 0;
 
-        // Check if both teams can play another game this week
-        if (teamAGames < gamesPerWeek && teamBGames < gamesPerWeek) {
-          weekMatchups.push({ matchup, originalIndex: i });
-          teamGamesThisWeek.set(matchup.teamA.team_id, teamAGames + 1);
-          teamGamesThisWeek.set(matchup.teamB.team_id, teamBGames + 1);
+          // Score based on how many games each team has (lower is better)
+          const score = teamAGames + teamBGames;
+
+          if (score < bestScore) {
+            bestScore = score;
+            bestMatchupIdx = i;
+          }
         }
-      }
 
-      // Add games for this week with time slots
-      const courts = timeConfig?.courtsAvailable || 1;
-      const gameDuration = timeConfig?.gameDurationMinutes || 45;
-      const firstTime = timeConfig?.firstGameTime || '18:00';
+        if (bestMatchupIdx === -1) {
+          // Pool exhausted, refill it (for leagues needing repeat matchups)
+          matchupPool = [...allMatchups];
+          shuffleArray(matchupPool);
+          bestMatchupIdx = 0;
+        }
 
-      for (let i = 0; i < weekMatchups.length; i++) {
-        const { matchup } = weekMatchups[i];
-        const courtNum = (i % courts) + 1;
-        const timeSlotIndex = Math.floor(i / courts);
+        const matchup = matchupPool[bestMatchupIdx];
+        matchupPool.splice(bestMatchupIdx, 1);
+
+        const courtNum = (slot % courts) + 1;
+        const timeSlotIndex = Math.floor(slot / courts);
         const gameTime = addMinutesToTime(firstTime, timeSlotIndex * gameDuration);
 
-        scheduledGames.push({
+        weekGames.push({
           tournament_id: tournamentId,
           team_a_id: matchup.teamA.team_id,
           team_b_id: matchup.teamB.team_id,
@@ -105,65 +125,20 @@ export async function generateSeasonSchedule(
           court_number: courtNum,
           status: 'pending',
         });
-        gameNumber++;
+
+        teamGamesThisWeek.set(matchup.teamA.team_id, (teamGamesThisWeek.get(matchup.teamA.team_id) || 0) + 1);
+        teamGamesThisWeek.set(matchup.teamB.team_id, (teamGamesThisWeek.get(matchup.teamB.team_id) || 0) + 1);
       }
 
-      // Remove used matchups from the pool
-      const usedIndices = new Set(weekMatchups.map(w => w.originalIndex));
-      const remainingMatchups = allMatchups.filter((_, idx) => !usedIndices.has(idx));
-      allMatchups.length = 0;
-      allMatchups.push(...remainingMatchups);
-    }
-
-    // If we still have matchups left, distribute them in additional weeks
-    let extraWeek = seasonWeeks + 1;
-    const courts = timeConfig?.courtsAvailable || 1;
-    const gameDuration = timeConfig?.gameDurationMinutes || 45;
-    const firstTime = timeConfig?.firstGameTime || '18:00';
-
-    while (allMatchups.length > 0) {
-      const weekDate = new Date(startDateObj);
-      weekDate.setDate(weekDate.getDate() + (extraWeek - 1) * 7);
-      const weekDateStr = weekDate.toISOString().split('T')[0];
-
-      const teamGamesThisWeek = new Map<string, number>();
-      const weekMatchups: typeof allMatchups = [];
-
-      for (let i = 0; i < allMatchups.length; i++) {
-        const matchup = allMatchups[i];
-        const teamAGames = teamGamesThisWeek.get(matchup.teamA.team_id) || 0;
-        const teamBGames = teamGamesThisWeek.get(matchup.teamB.team_id) || 0;
-
-        if (teamAGames < gamesPerWeek && teamBGames < gamesPerWeek) {
-          const gameIndex = weekMatchups.length;
-          const courtNum = (gameIndex % courts) + 1;
-          const timeSlotIndex = Math.floor(gameIndex / courts);
-          const gameTime = addMinutesToTime(firstTime, timeSlotIndex * gameDuration);
-
-          scheduledGames.push({
-            tournament_id: tournamentId,
-            team_a_id: matchup.teamA.team_id,
-            team_b_id: matchup.teamB.team_id,
-            week_number: extraWeek,
-            scheduled_date: weekDateStr,
-            scheduled_time: gameTime,
-            match_round: `week_${extraWeek}`,
-            court_number: courtNum,
-            status: 'pending',
-          });
-          weekMatchups.push(matchup);
-          teamGamesThisWeek.set(matchup.teamA.team_id, teamAGames + 1);
-          teamGamesThisWeek.set(matchup.teamB.team_id, teamBGames + 1);
+      // Sort week games by time then court
+      weekGames.sort((a, b) => {
+        if (a.scheduled_time !== b.scheduled_time) {
+          return (a.scheduled_time || '').localeCompare(b.scheduled_time || '');
         }
-      }
+        return a.court_number - b.court_number;
+      });
 
-      // Remove scheduled matchups
-      const scheduledSet = new Set(weekMatchups);
-      allMatchups.splice(0, allMatchups.length, ...allMatchups.filter(m => !scheduledSet.has(m)));
-      extraWeek++;
-
-      // Safety break
-      if (extraWeek > seasonWeeks + 20) break;
+      scheduledGames.push(...weekGames);
     }
 
     // Insert all games into database
@@ -219,15 +194,34 @@ export async function generatePlayoffBracket(
 
     // Generate bracket pairings (1 vs 8, 4 vs 5, 2 vs 7, 3 vs 6 for 8 teams)
     const bracketOrder = generateBracketOrder(bracketSize);
-    const games: any[] = [];
+
+    // Track first round games and their winners (for advancing byes)
+    const firstRoundGames: Array<{
+      position: number;
+      teamAId: string | null;
+      teamBId: string | null;
+      byeWinnerId: string | null;
+    }> = [];
 
     // First round
     const firstRoundName = getRoundName(0, rounds);
+    const games: any[] = [];
+
     for (let i = 0; i < bracketSize / 2; i++) {
       const seedA = bracketOrder[i * 2];
       const seedB = bracketOrder[i * 2 + 1];
       const teamA = playoffTeams[seedA - 1];
       const teamB = playoffTeams[seedB - 1];
+
+      const hasBye = (teamA && !teamB) || (!teamA && teamB);
+      const byeWinnerId = teamA && !teamB ? teamA.team_id : (!teamA && teamB ? teamB.team_id : null);
+
+      firstRoundGames.push({
+        position: i,
+        teamAId: teamA?.team_id || null,
+        teamBId: teamB?.team_id || null,
+        byeWinnerId,
+      });
 
       games.push({
         tournament_id: tournamentId,
@@ -235,23 +229,44 @@ export async function generatePlayoffBracket(
         team_b_id: teamB?.team_id || null,
         match_round: firstRoundName,
         court_number: i + 1,
-        status: 'pending',
+        status: hasBye ? 'completed' : 'pending',
         // Handle byes
-        ...(teamA && !teamB ? { match_winner: 'A', status: 'completed' } : {}),
-        ...(!teamA && teamB ? { match_winner: 'B', status: 'completed' } : {}),
+        ...(teamA && !teamB ? { match_winner: 'A' } : {}),
+        ...(!teamA && teamB ? { match_winner: 'B' } : {}),
       });
     }
 
-    // Subsequent rounds (placeholders)
+    // Subsequent rounds - pre-populate with bye winners
     for (let round = 1; round < rounds; round++) {
       const roundName = getRoundName(round, rounds);
       const matchesInRound = Math.pow(2, rounds - round - 1);
 
       for (let i = 0; i < matchesInRound; i++) {
+        // For round 1 (first round after quarterfinals), check for bye winners
+        let teamAId: string | null = null;
+        let teamBId: string | null = null;
+
+        if (round === 1) {
+          // Position i in this round receives winners from positions i*2 and i*2+1 of previous round
+          const prevPosA = i * 2;
+          const prevPosB = i * 2 + 1;
+
+          const prevGameA = firstRoundGames[prevPosA];
+          const prevGameB = firstRoundGames[prevPosB];
+
+          // If previous game was a bye, advance the winner
+          if (prevGameA?.byeWinnerId) {
+            teamAId = prevGameA.byeWinnerId;
+          }
+          if (prevGameB?.byeWinnerId) {
+            teamBId = prevGameB.byeWinnerId;
+          }
+        }
+
         games.push({
           tournament_id: tournamentId,
-          team_a_id: null,
-          team_b_id: null,
+          team_a_id: teamAId,
+          team_b_id: teamBId,
           match_round: roundName,
           court_number: i + 1,
           status: 'pending',
@@ -385,6 +400,14 @@ function getRoundName(roundIndex: number, totalRounds: number): string {
   if (fromEnd === 2) return 'semifinals';
   if (fromEnd === 3) return 'quarterfinals';
   return `round_${roundIndex + 1}`;
+}
+
+/**
+ * Convert time string to minutes since midnight
+ */
+function timeToMinutes(time: string): number {
+  const [hours, mins] = time.split(':').map(Number);
+  return hours * 60 + mins;
 }
 
 /**

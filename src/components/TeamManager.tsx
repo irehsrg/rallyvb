@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase, logAdminAction } from '../lib/supabase';
 import { Team, TeamMember, Player } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -238,8 +239,8 @@ export default function TeamManager() {
 
     </div>
 
-    {/* Team Form Modal - Outside card-glass for proper z-index */}
-    {(showAddModal || editingTeam) && (
+    {/* Team Form Modal - Portaled to body */}
+    {(showAddModal || editingTeam) && createPortal(
       <TeamFormModal
         team={editingTeam}
         currentUserId={player?.id}
@@ -253,11 +254,12 @@ export default function TeamManager() {
           setShowAddModal(false);
           setEditingTeam(null);
         }}
-      />
+      />,
+      document.body
     )}
 
-    {/* Roster Management Modal - Outside card-glass for proper z-index */}
-    {managingRoster && (
+    {/* Roster Management Modal - Portaled to body */}
+    {managingRoster && createPortal(
       <RosterManagementModal
         team={managingRoster}
         adminId={player?.id}
@@ -266,7 +268,8 @@ export default function TeamManager() {
           fetchTeams();
           setManagingRoster(null);
         }}
-      />
+      />,
+      document.body
     )}
     </>
   );

@@ -15,6 +15,7 @@ import PlayerRatingManager from '../components/PlayerRatingManager';
 import AdminVenueAssignments from '../components/AdminVenueAssignments';
 import SessionTeamsManager from '../components/SessionTeamsManager';
 import GroupBulkCheckin from '../components/GroupBulkCheckin';
+import CollapsibleSection from '../components/CollapsibleSection';
 import { getAdminPermissions, getAdminRoleDisplayName, getAssignedVenueIds, isVenueScoped } from '../utils/permissions';
 import { notifySessionCreated, notifyGameResult } from '../utils/notifications';
 import { shouldSkipRatings } from '../utils/rotation';
@@ -1758,47 +1759,93 @@ export default function Admin() {
           </div>
         )}
 
-        {/* Admin Management */}
-        {permissions.canManageAdmins && (
-          <div className="mt-8 animate-slide-up">
-            <AdminManager />
-          </div>
-        )}
+        {/* Collapsible Management Sections */}
+        <div className="mt-8 space-y-4">
+          {/* Tournament Management */}
+          {(permissions.canCreateTournaments || permissions.canManageTournaments) && (
+            <CollapsibleSection
+              title="Tournaments"
+              icon={
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+              }
+            >
+              <TournamentManager />
+            </CollapsibleSection>
+          )}
 
-        {/* Player Rating Management */}
-        {permissions.canAdjustRatings && (
-          <div className="mt-8 animate-slide-up">
-            <PlayerRatingManager />
-          </div>
-        )}
+          {/* Team Management */}
+          {(permissions.canCreateTeams || permissions.canManageOwnTeams || permissions.canManageAllTeams) && (
+            <CollapsibleSection
+              title="Teams"
+              icon={
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              }
+            >
+              <TeamManager />
+            </CollapsibleSection>
+          )}
 
-        {/* Venues Management */}
-        {permissions.canManageVenues && (
-          <div className="mt-8 animate-slide-up">
-            <VenuesManager />
-          </div>
-        )}
+          {/* Admin Management */}
+          {permissions.canManageAdmins && (
+            <CollapsibleSection
+              title="Admin Users"
+              icon={
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+              }
+            >
+              <AdminManager />
+            </CollapsibleSection>
+          )}
 
-        {/* Venue Assignments (for location admins) */}
-        {permissions.canManageAdmins && (
-          <div className="mt-8 animate-slide-up">
-            <AdminVenueAssignments />
-          </div>
-        )}
+          {/* Player Rating Management */}
+          {permissions.canAdjustRatings && (
+            <CollapsibleSection
+              title="Player Ratings"
+              icon={
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+              }
+            >
+              <PlayerRatingManager />
+            </CollapsibleSection>
+          )}
 
-        {/* Team Management */}
-        {(permissions.canCreateTeams || permissions.canManageOwnTeams || permissions.canManageAllTeams) && (
-          <div className="mt-8 animate-slide-up">
-            <TeamManager />
-          </div>
-        )}
+          {/* Venues Management */}
+          {permissions.canManageVenues && (
+            <CollapsibleSection
+              title="Venues"
+              icon={
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              }
+            >
+              <VenuesManager />
+            </CollapsibleSection>
+          )}
 
-        {/* Tournament Management */}
-        {(permissions.canCreateTournaments || permissions.canManageTournaments) && (
-          <div className="mt-8 animate-slide-up">
-            <TournamentManager />
-          </div>
-        )}
+          {/* Venue Assignments (for location admins) */}
+          {permissions.canManageAdmins && (
+            <CollapsibleSection
+              title="Venue Assignments"
+              icon={
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+              }
+            >
+              <AdminVenueAssignments />
+            </CollapsibleSection>
+          )}
+        </div>
 
         {/* Admin Activity Log */}
         {permissions.canViewActivityLog && (

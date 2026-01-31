@@ -6,6 +6,23 @@ import { Link } from 'react-router-dom';
 import GroupsModal from '../components/GroupsModal';
 import VenueSelector from '../components/VenueSelector';
 import VenueFollowButton from '../components/VenueFollowButton';
+import { formatTime } from '../utils/schedule';
+
+interface UpcomingGame {
+  id: string;
+  tournament_id: string;
+  tournament_name: string;
+  team_a_id: string;
+  team_b_id: string;
+  team_a_name: string;
+  team_b_name: string;
+  scheduled_date: string;
+  scheduled_time?: string;
+  week_number?: number;
+  match_round: string;
+  court_number: number;
+  is_home_team: boolean;
+}
 
 export default function Home() {
   const { player } = useAuth();
@@ -20,9 +37,13 @@ export default function Home() {
   const [timeUntilDeadline, setTimeUntilDeadline] = useState<string | null>(null);
   const [showGroupsModal, setShowGroupsModal] = useState(false);
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
+  const [upcomingGames, setUpcomingGames] = useState<UpcomingGame[]>([]);
 
   useEffect(() => {
     fetchCurrentSession();
+    if (player) {
+      fetchUpcomingGames();
+    }
   }, [player, selectedVenueId]);
 
   // Check deadline status periodically
@@ -156,6 +177,82 @@ export default function Home() {
       setWaitlist((waitlistEntries as any) || []);
     } catch (error) {
       console.error('Error fetching waitlist:', error);
+    }
+  };
+
+  const fetchUpcomingGames = async () => {
+    if (!player) return;
+
+    try {
+      // Get player's teams
+      const { data: playerTeams } = await supabase
+        .from('team_members')
+        .select('team_id')
+        .eq('player_id', player.id);
+
+      if (!playerTeams || playerTeams.length === 0) return;
+
+      const teamIds = playerTeams.map(t => t.team_id);
+
+      // Get upcoming games for these teams
+      const today = new Date().toISOString().split('T')[0];
+      const { data: games } = await supabase
+        .from('games')
+        .select(`
+          id,
+          tournament_id,
+          team_a_id,
+          team_b_id,
+          scheduled_date,
+          scheduled_time,
+          week_number,
+          match_round,
+          court_number,
+          status
+        `)
+        .or(`team_a_id.in.(${teamIds.join(',')}),team_b_id.in.(${teamIds.join(',')})`)
+        .eq('status', 'pending')
+        .gte('scheduled_date', today)
+        .order('scheduled_date')
+        .order('scheduled_time')
+        .limit(5);
+
+      if (!games || games.length === 0) {
+        setUpcomingGames([]);
+        return;
+      }
+
+      // Get tournament and team names
+      const tournamentIds = [...new Set(games.map(g => g.tournament_id))];
+      const allTeamIds = [...new Set(games.flatMap(g => [g.team_a_id, g.team_b_id]))];
+
+      const [{ data: tournaments }, { data: teams }] = await Promise.all([
+        supabase.from('tournaments').select('id, name').in('id', tournamentIds),
+        supabase.from('teams').select('id, name').in('id', allTeamIds),
+      ]);
+
+      const tournamentMap = new Map(tournaments?.map(t => [t.id, t.name]) || []);
+      const teamMap = new Map(teams?.map(t => [t.id, t.name]) || []);
+
+      const upcomingGamesWithNames: UpcomingGame[] = games.map(g => ({
+        id: g.id,
+        tournament_id: g.tournament_id,
+        tournament_name: tournamentMap.get(g.tournament_id) || 'Tournament',
+        team_a_id: g.team_a_id,
+        team_b_id: g.team_b_id,
+        team_a_name: teamMap.get(g.team_a_id) || 'TBD',
+        team_b_name: teamMap.get(g.team_b_id) || 'TBD',
+        scheduled_date: g.scheduled_date,
+        scheduled_time: g.scheduled_time,
+        week_number: g.week_number,
+        match_round: g.match_round,
+        court_number: g.court_number,
+        is_home_team: teamIds.includes(g.team_a_id),
+      }));
+
+      setUpcomingGames(upcomingGamesWithNames);
+    } catch (error) {
+      console.error('Error fetching upcoming games:', error);
     }
   };
 
@@ -341,6 +438,60 @@ export default function Home() {
                 {player.win_streak > 0 ? `🔥 ${player.win_streak}` : '-'}
               </div>
               <div className="text-sm text-gray-400 mt-1">Streak</div>
+            </div>
+          </div>
+        )}
+
+        {/* Upcoming Games */}
+        {upcomingGames.length > 0 && (
+          <div className="card-glass p-6 mb-8 animate-slide-up">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-lg bg-rally-coral/20 flex items-center justify-center">
+                <svg className="w-5 h-5 text-rally-coral" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-100">Upcoming Games</h3>
+            </div>
+            <div className="space-y-3">
+              {upcomingGames.map(game => (
+                <Link
+                  key={game.id}
+                  to={`/tournaments/${game.tournament_id}`}
+                  className="block p-4 bg-rally-dark/50 rounded-xl hover:bg-rally-dark/70 transition-colors"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-rally-coral font-medium">{game.tournament_name}</span>
+                    <span className="text-xs text-gray-500">
+                      {game.week_number ? `Week ${game.week_number}` : game.match_round}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className={`font-medium ${game.is_home_team ? 'text-rally-coral' : 'text-gray-300'}`}>
+                        {game.team_a_name}
+                      </span>
+                      <span className="text-gray-500 text-sm">vs</span>
+                      <span className={`font-medium ${!game.is_home_team ? 'text-rally-coral' : 'text-gray-300'}`}>
+                        {game.team_b_name}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                    <span>
+                      {new Date(game.scheduled_date).toLocaleDateString('en-US', {
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </span>
+                    {game.scheduled_time && (
+                      <span>{formatTime(game.scheduled_time)}</span>
+                    )}
+                    <span>Court {game.court_number}</span>
+                  </div>
+                </Link>
+              ))}
             </div>
           </div>
         )}

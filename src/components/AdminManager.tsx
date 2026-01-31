@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase, logAdminAction } from '../lib/supabase';
 import { Player, AdminRole } from '../types';
 import { getAdminRoleDisplayName, getAdminRoleDescription } from '../utils/permissions';
@@ -175,8 +176,8 @@ export default function AdminManager() {
         ))}
       </div>
 
-      {/* Edit Role Modal */}
-      {editingPlayer && (
+      {/* Edit Role Modal - Portaled to body */}
+      {editingPlayer && createPortal(
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="card-glass p-8 max-w-md w-full">
             <div className="flex items-center justify-between mb-6">
@@ -246,7 +247,8 @@ export default function AdminManager() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

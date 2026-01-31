@@ -247,7 +247,7 @@ export default function TournamentView() {
             {tournament.season_weeks && (
               <div className="card-glass p-6">
                 <h3 className="text-xl font-bold text-gray-100 mb-4">Season Schedule</h3>
-                <TournamentSchedule tournament={tournament} teams={teams} />
+                <TournamentSchedule tournament={tournament} teams={teams} onGameUpdated={fetchTournamentData} />
               </div>
             )}
 
@@ -257,7 +257,7 @@ export default function TournamentView() {
                 <h3 className="text-xl font-bold text-gray-100 mb-4">
                   {tournament.playoffs_enabled ? 'Playoff Bracket' : 'Tournament Bracket'}
                 </h3>
-                <TournamentBracket tournament={tournament} teams={teams} matches={matches} />
+                <TournamentBracket tournament={tournament} teams={teams} matches={matches} onMatchUpdated={fetchTournamentData} />
               </div>
             )}
           </div>

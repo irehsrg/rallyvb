@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase, logAdminAction } from '../lib/supabase';
 import { Venue } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -200,7 +201,7 @@ export default function VenuesManager() {
         </div>
       )}
 
-      {(showAddModal || editingVenue) && (
+      {(showAddModal || editingVenue) && createPortal(
         <VenueFormModal
           venue={editingVenue}
           onClose={() => {
@@ -212,7 +213,8 @@ export default function VenuesManager() {
             setShowAddModal(false);
             setEditingVenue(null);
           }}
-        />
+        />,
+        document.body
       )}
     </div>
   );

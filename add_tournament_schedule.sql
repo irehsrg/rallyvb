@@ -8,6 +8,7 @@ ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS auto_seed_playoffs BOOLEAN DEFA
 -- Add time scheduling fields to tournaments
 ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS game_duration_minutes INTEGER DEFAULT 45;
 ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS first_game_time TIME DEFAULT '18:00';
+ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS last_game_time TIME;
 ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS courts_available INTEGER DEFAULT 2;
 
 -- Add week_number and time to games for season scheduling

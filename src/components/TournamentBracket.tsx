@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
 import html2canvas from 'html2canvas';
+import { supabase } from '../lib/supabase';
 import { Team, TournamentGame, Tournament } from '../types';
+import { prepareForCapture } from '../utils/pngExport';
 
 interface BracketMatch {
   id?: string;
@@ -18,23 +20,33 @@ interface TournamentBracketProps {
   tournament: Tournament;
   teams: Team[];
   matches: TournamentGame[];
+  onMatchUpdated?: () => void;
 }
 
-export default function TournamentBracket({ tournament, teams, matches }: TournamentBracketProps) {
+export default function TournamentBracket({ tournament, teams, matches, onMatchUpdated }: TournamentBracketProps) {
   const bracketRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
+  const [editingMatch, setEditingMatch] = useState<BracketMatch | null>(null);
+  const [scoreA, setScoreA] = useState('');
+  const [scoreB, setScoreB] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const handleDownloadPNG = async () => {
     if (!bracketRef.current) return;
 
     setDownloading(true);
     try {
+      // Prepare element for capture (converts oklab colors to hex)
+      const cleanup = prepareForCapture(bracketRef.current);
+
       const canvas = await html2canvas(bracketRef.current, {
-        backgroundColor: '#1a1a2e', // rally-darker background
-        scale: 2, // Higher resolution
+        backgroundColor: '#1a1a2e',
+        scale: 2,
         logging: false,
         useCORS: true,
       });
+
+      cleanup();
 
       const link = document.createElement('a');
       link.download = `${tournament.name.replace(/[^a-z0-9]/gi, '_')}_bracket.png`;
@@ -46,6 +58,112 @@ export default function TournamentBracket({ tournament, teams, matches }: Tourna
     } finally {
       setDownloading(false);
     }
+  };
+
+  const handleEditMatch = (match: BracketMatch) => {
+    if (!match.team_a || !match.team_b) return; // Can't score a match without both teams
+    setEditingMatch(match);
+    setScoreA(match.score_a?.toString() || '');
+    setScoreB(match.score_b?.toString() || '');
+  };
+
+  const handleSaveScore = async () => {
+    if (!editingMatch?.id) return;
+
+    const scoreANum = parseInt(scoreA) || 0;
+    const scoreBNum = parseInt(scoreB) || 0;
+
+    if (scoreANum === scoreBNum) {
+      alert('Games cannot end in a tie. Please enter different scores.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const winner: 'A' | 'B' = scoreANum > scoreBNum ? 'A' : 'B';
+      const winningTeamId = winner === 'A' ? editingMatch.team_a?.id : editingMatch.team_b?.id;
+
+      // Update the current game
+      const { error: updateError } = await supabase
+        .from('games')
+        .update({
+          score_a: scoreANum,
+          score_b: scoreBNum,
+          match_winner: winner,
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', editingMatch.id);
+
+      if (updateError) throw updateError;
+
+      // Find and update the next round game to advance the winner
+      const currentRound = editingMatch.game?.match_round || '';
+      const nextRoundName = getNextRoundName(currentRound);
+
+      if (nextRoundName && winningTeamId) {
+        // Get current game's court_number to calculate next round position
+        // Position in display is 0-indexed, court_number in DB is 1-indexed
+        const currentCourtNumber = editingMatch.game?.court_number || (editingMatch.position + 1);
+
+        // Calculate which position in the next round this winner goes to
+        // Games 1,2 → Position 1 (court 1), Games 3,4 → Position 2 (court 2), etc.
+        const nextCourtNumber = Math.ceil(currentCourtNumber / 2);
+        // Odd court numbers (1,3,5...) go to team_a, even (2,4,6...) go to team_b
+        const isTeamA = currentCourtNumber % 2 === 1;
+
+        // Find the next round game
+        const { data: nextGames, error: findError } = await supabase
+          .from('games')
+          .select('*')
+          .eq('tournament_id', tournament.id)
+          .eq('match_round', nextRoundName)
+          .eq('court_number', nextCourtNumber);
+
+        if (findError) {
+          console.error('Error finding next round game:', findError);
+        } else if (nextGames && nextGames.length > 0) {
+          const nextGame = nextGames[0];
+          const updateField = isTeamA ? 'team_a_id' : 'team_b_id';
+
+          const { error: advanceError } = await supabase
+            .from('games')
+            .update({ [updateField]: winningTeamId })
+            .eq('id', nextGame.id);
+
+          if (advanceError) {
+            console.error('Error advancing winner to next round:', advanceError);
+          }
+        } else {
+          console.warn(`No next round game found: round=${nextRoundName}, court=${nextCourtNumber}`);
+        }
+      }
+
+      setEditingMatch(null);
+      onMatchUpdated?.();
+    } catch (error) {
+      console.error('Error saving score:', error);
+      alert('Failed to save score');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const getNextRoundName = (currentRound: string): string | null => {
+    if (currentRound === 'finals') return null;
+    if (currentRound === 'semifinals') return 'finals';
+    if (currentRound === 'quarterfinals') return 'semifinals';
+    // Handle round_1, round_2, etc.
+    const match = currentRound.match(/round_(\d+)/);
+    if (match) {
+      const roundNum = parseInt(match[1]);
+      const totalRounds = Math.ceil(Math.log2(teams.length));
+      const fromEnd = totalRounds - roundNum;
+      if (fromEnd === 2) return 'semifinals';
+      if (fromEnd === 1) return 'finals';
+      return `round_${roundNum + 1}`;
+    }
+    return null;
   };
 
   return (
@@ -85,17 +203,109 @@ export default function TournamentBracket({ tournament, teams, matches }: Tourna
           </p>
         </div>
 
-        {tournament.format === 'round_robin' ? (
+        {tournament.format === 'round_robin' && !tournament.playoffs_enabled ? (
           <RoundRobinView teams={teams} matches={matches} />
         ) : (
-          <EliminationBracket teams={teams} matches={matches} />
+          <>
+            {/* Show standings for season tournaments with playoffs */}
+            {tournament.format === 'round_robin' && tournament.playoffs_enabled && (
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold text-gray-300 mb-4">Season Standings</h3>
+                <RoundRobinView teams={teams} matches={matches.filter(m => m.match_round?.startsWith('week_'))} />
+              </div>
+            )}
+            {/* Playoff/Elimination Bracket */}
+            <div>
+              {tournament.playoffs_enabled && (
+                <h3 className="text-lg font-semibold text-gray-300 mb-4">Playoff Bracket</h3>
+              )}
+              <EliminationBracket
+                teams={teams}
+                matches={matches.filter(m => !m.match_round?.startsWith('week_'))}
+                onEditMatch={handleEditMatch}
+              />
+            </div>
+          </>
         )}
       </div>
+
+      {/* Score Entry Modal */}
+      {editingMatch && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-rally-dark rounded-2xl p-6 w-full max-w-md border border-white/10">
+            <h3 className="text-xl font-bold text-gray-100 mb-6 text-center">Enter Score</h3>
+
+            <div className="space-y-4">
+              {/* Team A */}
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    {editingMatch.team_a?.name || 'Team A'}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={scoreA}
+                    onChange={(e) => setScoreA(e.target.value)}
+                    className="w-full px-4 py-3 bg-rally-darker border border-white/10 rounded-lg text-gray-100 text-center text-2xl font-bold focus:outline-none focus:border-rally-coral"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
+              <div className="text-center text-gray-500 text-sm">vs</div>
+
+              {/* Team B */}
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    {editingMatch.team_b?.name || 'Team B'}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={scoreB}
+                    onChange={(e) => setScoreB(e.target.value)}
+                    className="w-full px-4 py-3 bg-rally-darker border border-white/10 rounded-lg text-gray-100 text-center text-2xl font-bold focus:outline-none focus:border-rally-coral"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Preview Winner */}
+            {scoreA && scoreB && parseInt(scoreA) !== parseInt(scoreB) && (
+              <div className="mt-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg text-center">
+                <span className="text-green-400 font-medium">
+                  Winner: {parseInt(scoreA) > parseInt(scoreB) ? editingMatch.team_a?.name : editingMatch.team_b?.name}
+                </span>
+              </div>
+            )}
+
+            {/* Buttons */}
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setEditingMatch(null)}
+                className="flex-1 px-4 py-3 bg-rally-darker border border-white/10 rounded-lg text-gray-300 hover:bg-rally-light transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveScore}
+                disabled={saving || !scoreA || !scoreB || parseInt(scoreA) === parseInt(scoreB)}
+                className="flex-1 px-4 py-3 bg-rally-coral text-white font-semibold rounded-lg hover:bg-rally-coral/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {saving ? 'Saving...' : 'Save Score'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function EliminationBracket({ teams, matches }: { teams: Team[]; matches: TournamentGame[] }) {
+function EliminationBracket({ teams, matches, onEditMatch }: { teams: Team[]; matches: TournamentGame[]; onEditMatch: (match: BracketMatch) => void }) {
   // Calculate bracket structure
   const teamCount = teams.length;
   const rounds = Math.ceil(Math.log2(teamCount));
@@ -161,7 +371,7 @@ function EliminationBracket({ teams, matches }: { teams: Team[]; matches: Tourna
             </h3>
             <div className="flex flex-col justify-around flex-1 gap-4">
               {roundMatches.map((match) => (
-                <BracketMatchCard key={`${roundIndex}-${match.position}`} match={match} />
+                <BracketMatchCard key={`${roundIndex}-${match.position}`} match={match} onEdit={onEditMatch} />
               ))}
             </div>
           </div>
@@ -171,9 +381,21 @@ function EliminationBracket({ teams, matches }: { teams: Team[]; matches: Tourna
   );
 }
 
-function BracketMatchCard({ match }: { match: BracketMatch }) {
+function BracketMatchCard({ match, onEdit }: { match: BracketMatch; onEdit: (match: BracketMatch) => void }) {
+  const canEdit = match.team_a && match.team_b && match.game?.status !== 'completed';
+  const isCompleted = match.game?.status === 'completed';
+
   return (
-    <div className="w-64 bg-rally-dark/50 rounded-xl border-2 border-white/10 overflow-hidden">
+    <div
+      onClick={() => canEdit && onEdit(match)}
+      className={`w-64 bg-rally-dark/50 rounded-xl border-2 overflow-hidden transition-all ${
+        canEdit
+          ? 'border-white/10 hover:border-rally-coral/50 cursor-pointer hover:shadow-lg'
+          : isCompleted
+          ? 'border-green-500/30'
+          : 'border-white/10'
+      }`}
+    >
       {/* Team A */}
       <div
         className={`p-3 border-b border-white/10 ${
@@ -238,9 +460,14 @@ function BracketMatchCard({ match }: { match: BracketMatch }) {
           <span className="text-xs text-green-400 font-medium">In Progress</span>
         </div>
       )}
+      {canEdit && (
+        <div className="px-3 py-1 bg-rally-coral/10 text-center">
+          <span className="text-xs text-rally-coral font-medium">Click to enter score</span>
+        </div>
+      )}
       {!match.team_a && !match.team_b && (
         <div className="px-3 py-1 bg-rally-dark text-center">
-          <span className="text-xs text-gray-500">Not Scheduled</span>
+          <span className="text-xs text-gray-500">Waiting for previous round</span>
         </div>
       )}
     </div>
