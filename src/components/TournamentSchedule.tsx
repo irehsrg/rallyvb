@@ -3,7 +3,7 @@ import html2canvas from 'html2canvas';
 import { supabase } from '../lib/supabase';
 import { Tournament, Team } from '../types';
 import { formatTime } from '../utils/schedule';
-import { prepareForCapture } from '../utils/pngExport';
+import { prepareForCapture, getOnCloneHandler } from '../utils/pngExport';
 
 interface ScheduledGame {
   id: string;
@@ -66,7 +66,7 @@ export default function TournamentSchedule({ tournament, teams, onGameUpdated }:
 
     setDownloading(true);
     try {
-      // Prepare element for capture (converts oklab colors to hex)
+      // Prepare element for capture (converts oklab/oklch colors to hex)
       const cleanup = prepareForCapture(scheduleRef.current);
 
       const canvas = await html2canvas(scheduleRef.current, {
@@ -74,6 +74,8 @@ export default function TournamentSchedule({ tournament, teams, onGameUpdated }:
         scale: 2,
         logging: false,
         useCORS: true,
+        // Also convert colors in the cloned element as a safety measure
+        onclone: getOnCloneHandler(),
       });
 
       cleanup();
@@ -84,7 +86,7 @@ export default function TournamentSchedule({ tournament, teams, onGameUpdated }:
       link.click();
     } catch (error) {
       console.error('Error generating schedule image:', error);
-      alert('Failed to generate schedule image');
+      alert('Failed to generate schedule image. Check console for details.');
     } finally {
       setDownloading(false);
     }
@@ -109,6 +111,17 @@ export default function TournamentSchedule({ tournament, teams, onGameUpdated }:
 
     if (scoreANum === scoreBNum) {
       alert('Games cannot end in a tie. Please enter different scores.');
+      return;
+    }
+
+    // Win by 2 validation (for scores above threshold)
+    const minScore = tournament.points_to_win || 25;
+    const minDiff = tournament.min_point_difference || 2;
+    const maxScore = Math.max(scoreANum, scoreBNum);
+    const scoreDiff = Math.abs(scoreANum - scoreBNum);
+
+    if (maxScore >= minScore && scoreDiff < minDiff) {
+      alert(`Games must be won by at least ${minDiff} points. Current difference: ${scoreDiff}`);
       return;
     }
 
@@ -233,62 +246,59 @@ export default function TournamentSchedule({ tournament, teams, onGameUpdated }:
                       <div
                         key={game.id}
                         onClick={() => canEdit && handleEditGame(game)}
-                        className={`px-4 py-3 flex items-center gap-4 transition-colors ${
+                        className={`px-4 py-3 transition-colors ${
                           game.status === 'completed'
                             ? 'bg-rally-dark/20'
                             : 'hover:bg-rally-dark/30 cursor-pointer'
                         }`}
                       >
-                        {/* Time & Court */}
-                        <div className="w-24 flex-shrink-0">
-                          {game.scheduled_time && (
-                            <div className="text-sm font-medium text-rally-coral">
-                              {formatTime(game.scheduled_time)}
-                            </div>
-                          )}
-                          <div className="text-xs text-gray-500">Court {game.court_number}</div>
-                        </div>
-
-                        {/* Matchup */}
-                        <div className="flex items-center gap-4 flex-1">
-                          <div className="flex-1 text-right">
-                            <span className={`font-medium ${
-                              game.match_winner === 'A' ? 'text-green-400' : 'text-gray-200'
-                            }`}>
-                              {getTeamName(game.team_a_id)}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-2 min-w-[80px] justify-center">
-                            {game.status === 'completed' ? (
-                              <span className="font-bold text-gray-100">
-                                {game.score_a} - {game.score_b}
-                              </span>
-                            ) : (
-                              <span className="text-sm text-gray-500">vs</span>
+                        <div className="flex items-center justify-between">
+                          {/* Time */}
+                          <div className="w-16 flex-shrink-0">
+                            {game.scheduled_time && (
+                              <div className="text-sm font-medium text-rally-coral">
+                                {formatTime(game.scheduled_time)}
+                              </div>
                             )}
                           </div>
 
-                          <div className="flex-1">
-                            <span className={`font-medium ${
-                              game.match_winner === 'B' ? 'text-green-400' : 'text-gray-200'
-                            }`}>
-                              {getTeamName(game.team_b_id)}
-                            </span>
-                          </div>
-                        </div>
+                          {/* Matchup - Full width display */}
+                          <div className="flex-1 px-4">
+                            <div className="flex items-center justify-center gap-3">
+                              <span className={`font-medium ${
+                                game.match_winner === 'A' ? 'text-green-400' : 'text-gray-200'
+                              }`}>
+                                {getTeamName(game.team_a_id)}
+                              </span>
 
-                        {/* Status */}
-                        <div className="w-20 text-right">
-                          {game.status === 'completed' ? (
-                            <span className="px-2 py-0.5 text-xs bg-green-500/20 text-green-400 rounded">
-                              Final
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 text-xs bg-rally-coral/20 text-rally-coral rounded">
-                              Enter Score
-                            </span>
-                          )}
+                              {game.status === 'completed' ? (
+                                <span className="font-bold text-gray-100 mx-2">
+                                  {game.score_a} - {game.score_b}
+                                </span>
+                              ) : (
+                                <span className="text-gray-500 mx-2">vs</span>
+                              )}
+
+                              <span className={`font-medium ${
+                                game.match_winner === 'B' ? 'text-green-400' : 'text-gray-200'
+                              }`}>
+                                {getTeamName(game.team_b_id)}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Status */}
+                          <div className="w-20 flex-shrink-0 text-right">
+                            {game.status === 'completed' ? (
+                              <span className="px-2 py-0.5 text-xs bg-green-500/20 text-green-400 rounded">
+                                Final
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 text-xs bg-rally-coral/20 text-rally-coral rounded">
+                                Enter
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );

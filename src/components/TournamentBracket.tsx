@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import html2canvas from 'html2canvas';
 import { supabase } from '../lib/supabase';
 import { Team, TournamentGame, Tournament } from '../types';
-import { prepareForCapture } from '../utils/pngExport';
+import { prepareForCapture, getOnCloneHandler } from '../utils/pngExport';
 
 interface BracketMatch {
   id?: string;
@@ -36,7 +36,7 @@ export default function TournamentBracket({ tournament, teams, matches, onMatchU
 
     setDownloading(true);
     try {
-      // Prepare element for capture (converts oklab colors to hex)
+      // Prepare element for capture (converts oklab/oklch colors to hex)
       const cleanup = prepareForCapture(bracketRef.current);
 
       const canvas = await html2canvas(bracketRef.current, {
@@ -44,6 +44,8 @@ export default function TournamentBracket({ tournament, teams, matches, onMatchU
         scale: 2,
         logging: false,
         useCORS: true,
+        // Also convert colors in the cloned element as a safety measure
+        onclone: getOnCloneHandler(),
       });
 
       cleanup();
@@ -54,7 +56,7 @@ export default function TournamentBracket({ tournament, teams, matches, onMatchU
       link.click();
     } catch (error) {
       console.error('Error generating bracket image:', error);
-      alert('Failed to generate bracket image');
+      alert('Failed to generate bracket image. Check console for details.');
     } finally {
       setDownloading(false);
     }
@@ -75,6 +77,17 @@ export default function TournamentBracket({ tournament, teams, matches, onMatchU
 
     if (scoreANum === scoreBNum) {
       alert('Games cannot end in a tie. Please enter different scores.');
+      return;
+    }
+
+    // Win by 2 validation
+    const minScore = tournament.points_to_win || 25;
+    const minDiff = tournament.min_point_difference || 2;
+    const maxScore = Math.max(scoreANum, scoreBNum);
+    const scoreDiff = Math.abs(scoreANum - scoreBNum);
+
+    if (maxScore >= minScore && scoreDiff < minDiff) {
+      alert(`Games must be won by at least ${minDiff} points. Current difference: ${scoreDiff}`);
       return;
     }
 

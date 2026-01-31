@@ -1046,6 +1046,38 @@ function TeamManagementModal({ tournament, adminId, onClose, onSuccess }: TeamMa
     }
   };
 
+  const handleRandomizeSeeds = async () => {
+    if (registeredTeams.length < 2) {
+      alert('Need at least 2 teams to randomize seeds');
+      return;
+    }
+
+    try {
+      // Create array of seeds 1 to N
+      const seeds = Array.from({ length: registeredTeams.length }, (_, i) => i + 1);
+
+      // Shuffle the seeds (Fisher-Yates)
+      for (let i = seeds.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [seeds[i], seeds[j]] = [seeds[j], seeds[i]];
+      }
+
+      // Update each team with a random seed
+      const updates = registeredTeams.map((tt: any, index: number) =>
+        supabase
+          .from('tournament_teams')
+          .update({ seed: seeds[index] })
+          .eq('id', tt.id)
+      );
+
+      await Promise.all(updates);
+      await fetchRegisteredTeams();
+    } catch (error: any) {
+      console.error('Error randomizing seeds:', error);
+      alert('Failed to randomize seeds: ' + error.message);
+    }
+  };
+
   const availableTeams = allTeams.filter(
     (team) =>
       !registeredTeams.some((rt: any) => rt.team?.id === team.id) &&
@@ -1081,10 +1113,24 @@ function TeamManagementModal({ tournament, adminId, onClose, onSuccess }: TeamMa
         <div className="grid grid-cols-2 gap-6 max-h-[70vh] overflow-y-auto">
           {/* Registered Teams */}
           <div>
-            <h3 className="text-lg font-semibold text-gray-100 mb-4">
-              Registered Teams ({registeredTeams.length}
-              {tournament.max_teams ? `/${tournament.max_teams}` : ''})
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-100">
+                Registered Teams ({registeredTeams.length}
+                {tournament.max_teams ? `/${tournament.max_teams}` : ''})
+              </h3>
+              {registeredTeams.length >= 2 && (
+                <button
+                  onClick={handleRandomizeSeeds}
+                  className="px-3 py-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 text-xs font-medium transition-all flex items-center gap-1"
+                  title="Randomize all seeds"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Randomize
+                </button>
+              )}
+            </div>
             {registeredTeams.length === 0 ? (
               <p className="text-sm text-gray-400 py-4">No teams registered yet</p>
             ) : (

@@ -14,7 +14,22 @@
       "Bash(git config:*)",
       "Bash(powershell \"Get-Content ''C:\\Users\\ajoin\\Projects\\VolleyballApp\\src\\pages\\Home.tsx'' | Measure-Object -Line | Select-Object -ExpandProperty Lines\")",
       "Bash(powershell \"Get-Content ''C:\\Users\\ajoin\\Projects\\VolleyballApp\\src\\pages\\Admin.tsx'' | Measure-Object -Line | Select-Object -ExpandProperty Lines\")",
-      "Bash(git push)"
+      "Bash(git push)",
+      "Bash(findstr:*)",
+      "WebSearch",
+      "Bash(find:*)",
+      "Bash(supabase functions logs:*)",
+      "Bash(dir:*)",
+      "Bash(powershell \"Get-ChildItem ''C:\\\\Users\\\\ajoin\\\\Projects\\\\Rally\\\\public\\\\help-images\\\\'' | Select-Object Name, Length | Format-Table -AutoSize\")",
+      "Bash(powershell \"Get-Content ''C:\\\\Users\\\\ajoin\\\\Projects\\\\Rally\\\\public\\\\help-images\\\\ios-1.PNG'' -Encoding Byte -TotalCount 8 | ForEach-Object { ''{0:X2}'' -f $_}\")",
+      "Bash(powershell -Command \"$bytes = [System.IO.File]::ReadAllBytes\\(''C:\\\\Users\\\\ajoin\\\\Projects\\\\Rally\\\\public\\\\help-images\\\\ios-1.PNG''\\)[0..7]; $bytes -join '',''\")",
+      "Bash(npx tsc:*)",
+      "Bash(tree:*)",
+      "Bash(git restore:*)",
+      "Bash(echo:*)",
+      "Bash(npx vercel --prod)",
+      "Bash(npx netlify deploy:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []
