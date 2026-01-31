@@ -238,57 +238,61 @@ export default function TournamentSchedule({ tournament, teams, onGameUpdated }:
                   </div>
                 </div>
 
-                {/* Games */}
-                <div className="divide-y divide-white/5">
-                  {weekGames.map(game => {
-                    const canEdit = game.status !== 'completed';
-                    return (
-                      <div
-                        key={game.id}
-                        onClick={() => canEdit && handleEditGame(game)}
-                        className={`px-4 py-3 transition-colors ${
-                          game.status === 'completed'
-                            ? 'bg-rally-dark/20'
-                            : 'hover:bg-rally-dark/30 cursor-pointer'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
+                {/* Games - Using table for reliable PNG export */}
+                <table className="w-full">
+                  <tbody>
+                    {weekGames.map(game => {
+                      const canEdit = game.status !== 'completed';
+                      return (
+                        <tr
+                          key={game.id}
+                          onClick={() => canEdit && handleEditGame(game)}
+                          className={`border-b border-white/5 ${
+                            game.status === 'completed'
+                              ? 'bg-rally-dark/20'
+                              : 'hover:bg-rally-dark/30 cursor-pointer'
+                          }`}
+                        >
                           {/* Time */}
-                          <div className="w-16 flex-shrink-0">
+                          <td className="px-3 py-3 w-20">
                             {game.scheduled_time && (
-                              <div className="text-sm font-medium text-rally-coral">
+                              <span className="text-sm font-medium text-rally-coral">
                                 {formatTime(game.scheduled_time)}
-                              </div>
+                              </span>
                             )}
-                          </div>
+                          </td>
 
-                          {/* Matchup - Full width display */}
-                          <div className="flex-1 px-4">
-                            <div className="flex items-center justify-center gap-3">
-                              <span className={`font-medium ${
-                                game.match_winner === 'A' ? 'text-green-400' : 'text-gray-200'
-                              }`}>
-                                {getTeamName(game.team_a_id)}
+                          {/* Team A */}
+                          <td className="px-2 py-3 text-right">
+                            <span className={`font-medium ${
+                              game.match_winner === 'A' ? 'text-green-400' : 'text-gray-200'
+                            }`}>
+                              {getTeamName(game.team_a_id)}
+                            </span>
+                          </td>
+
+                          {/* Score or VS */}
+                          <td className="px-3 py-3 text-center w-24">
+                            {game.status === 'completed' ? (
+                              <span className="font-bold text-gray-100">
+                                {game.score_a} - {game.score_b}
                               </span>
+                            ) : (
+                              <span className="text-gray-500">vs</span>
+                            )}
+                          </td>
 
-                              {game.status === 'completed' ? (
-                                <span className="font-bold text-gray-100 mx-2">
-                                  {game.score_a} - {game.score_b}
-                                </span>
-                              ) : (
-                                <span className="text-gray-500 mx-2">vs</span>
-                              )}
-
-                              <span className={`font-medium ${
-                                game.match_winner === 'B' ? 'text-green-400' : 'text-gray-200'
-                              }`}>
-                                {getTeamName(game.team_b_id)}
-                              </span>
-                            </div>
-                          </div>
+                          {/* Team B */}
+                          <td className="px-2 py-3 text-left">
+                            <span className={`font-medium ${
+                              game.match_winner === 'B' ? 'text-green-400' : 'text-gray-200'
+                            }`}>
+                              {getTeamName(game.team_b_id)}
+                            </span>
+                          </td>
 
                           {/* Status */}
-                          <div className="w-20 flex-shrink-0 text-right">
+                          <td className="px-3 py-3 w-20 text-right">
                             {game.status === 'completed' ? (
                               <span className="px-2 py-0.5 text-xs bg-green-500/20 text-green-400 rounded">
                                 Final
@@ -298,12 +302,12 @@ export default function TournamentSchedule({ tournament, teams, onGameUpdated }:
                                 Enter
                               </span>
                             )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             );
           })}

@@ -205,11 +205,11 @@ export default function TournamentBracket({ tournament, teams, matches, onMatchU
       </div>
 
       {/* Bracket Content */}
-      <div ref={bracketRef} className="p-4 bg-rally-darker rounded-xl">
+      <div ref={bracketRef} className="p-4 rounded-xl" style={{ backgroundColor: '#18181b' }}>
         {/* Tournament Header */}
-        <div className="text-center mb-6 pb-4 border-b border-white/10">
-          <h2 className="text-2xl font-bold text-gray-100">{tournament.name}</h2>
-          <p className="text-gray-400 text-sm mt-1">
+        <div className="text-center mb-6 pb-4" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
+          <h2 className="text-2xl font-bold" style={{ color: '#f4f4f5' }}>{tournament.name}</h2>
+          <p className="text-sm mt-1" style={{ color: '#a1a1aa' }}>
             {tournament.format === 'round_robin' ? 'Round Robin' :
              tournament.format === 'single_elimination' ? 'Single Elimination' : 'Double Elimination'}
             {tournament.start_date && ` • ${new Date(tournament.start_date).toLocaleDateString()}`}
@@ -223,14 +223,14 @@ export default function TournamentBracket({ tournament, teams, matches, onMatchU
             {/* Show standings for season tournaments with playoffs */}
             {tournament.format === 'round_robin' && tournament.playoffs_enabled && (
               <div className="mb-8">
-                <h3 className="text-lg font-semibold text-gray-300 mb-4">Season Standings</h3>
+                <h3 className="text-lg font-semibold mb-4" style={{ color: '#d4d4d8' }}>Season Standings</h3>
                 <RoundRobinView teams={teams} matches={matches.filter(m => m.match_round?.startsWith('week_'))} />
               </div>
             )}
             {/* Playoff/Elimination Bracket */}
             <div>
               {tournament.playoffs_enabled && (
-                <h3 className="text-lg font-semibold text-gray-300 mb-4">Playoff Bracket</h3>
+                <h3 className="text-lg font-semibold mb-4" style={{ color: '#d4d4d8' }}>Playoff Bracket</h3>
               )}
               <EliminationBracket
                 teams={teams}
@@ -379,7 +379,10 @@ function EliminationBracket({ teams, matches, onEditMatch }: { teams: Team[]; ma
       <div className="inline-flex gap-8 min-w-max p-4">
         {bracket.map((roundMatches, roundIndex) => (
           <div key={roundIndex} className="flex flex-col justify-around min-h-[600px]">
-            <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4 text-center">
+            <h3
+              className="text-sm font-bold uppercase tracking-wider mb-4 text-center"
+              style={{ color: '#a1a1aa' }}
+            >
               {getRoundDisplayName(roundIndex, rounds)}
             </h3>
             <div className="flex flex-col justify-around flex-1 gap-4">
@@ -398,89 +401,95 @@ function BracketMatchCard({ match, onEdit }: { match: BracketMatch; onEdit: (mat
   const canEdit = match.team_a && match.team_b && match.game?.status !== 'completed';
   const isCompleted = match.game?.status === 'completed';
 
+  // Use explicit hex colors for PNG export compatibility
+  const winnerBgStyle = { backgroundColor: 'rgba(34, 197, 94, 0.2)' }; // green-500/20
+  const winnerBorderStyle = { borderLeftWidth: '4px', borderLeftColor: '#22c55e' }; // green-500
+  const greenText = { color: '#4ade80' }; // green-400
+  const grayText = { color: '#e5e5e5' }; // gray-200
+  const mutedText = { color: '#a1a1aa' }; // gray-400
+
   return (
     <div
       onClick={() => canEdit && onEdit(match)}
-      className={`w-64 bg-rally-dark/50 rounded-xl border-2 overflow-hidden transition-all ${
+      className={`w-64 rounded-xl border-2 overflow-hidden transition-all ${
         canEdit
-          ? 'border-white/10 hover:border-rally-coral/50 cursor-pointer hover:shadow-lg'
-          : isCompleted
-          ? 'border-green-500/30'
-          : 'border-white/10'
+          ? 'hover:border-rally-coral/50 cursor-pointer hover:shadow-lg'
+          : ''
       }`}
+      style={{
+        backgroundColor: 'rgba(39, 39, 42, 0.5)', // rally-dark/50
+        borderColor: isCompleted ? 'rgba(34, 197, 94, 0.3)' : 'rgba(255, 255, 255, 0.1)'
+      }}
     >
       {/* Team A */}
       <div
-        className={`p-3 border-b border-white/10 ${
-          match.winner === 'A' ? 'bg-green-500/20 border-l-4 border-l-green-500' : ''
-        }`}
+        className="p-3"
+        style={{
+          borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+          ...(match.winner === 'A' ? { ...winnerBgStyle, ...winnerBorderStyle } : {})
+        }}
       >
         {match.team_a ? (
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 flex-1 min-w-0">
-              <span className="font-semibold text-gray-100 truncate">{match.team_a.name}</span>
+              <span className="font-semibold truncate" style={grayText}>{match.team_a.name}</span>
               {match.winner === 'A' && (
-                <svg className="w-4 h-4 text-green-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <svg className="w-4 h-4 flex-shrink-0" style={greenText} fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                 </svg>
               )}
             </div>
             {match.score_a !== undefined && (
-              <span className={`text-lg font-bold ml-2 ${
-                match.winner === 'A' ? 'text-green-400' : 'text-gray-400'
-              }`}>
+              <span className="text-lg font-bold ml-2" style={match.winner === 'A' ? greenText : mutedText}>
                 {match.score_a}
               </span>
             )}
           </div>
         ) : (
-          <div className="text-gray-600 text-sm">TBD</div>
+          <div className="text-sm" style={{ color: '#52525b' }}>TBD</div>
         )}
       </div>
 
       {/* Team B */}
       <div
-        className={`p-3 ${
-          match.winner === 'B' ? 'bg-green-500/20 border-l-4 border-l-green-500' : ''
-        }`}
+        className="p-3"
+        style={match.winner === 'B' ? { ...winnerBgStyle, ...winnerBorderStyle } : {}}
       >
         {match.team_b ? (
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 flex-1 min-w-0">
-              <span className="font-semibold text-gray-100 truncate">{match.team_b.name}</span>
+              <span className="font-semibold truncate" style={grayText}>{match.team_b.name}</span>
               {match.winner === 'B' && (
-                <svg className="w-4 h-4 text-green-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <svg className="w-4 h-4 flex-shrink-0" style={greenText} fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                 </svg>
               )}
             </div>
             {match.score_b !== undefined && (
-              <span className={`text-lg font-bold ml-2 ${
-                match.winner === 'B' ? 'text-green-400' : 'text-gray-400'
-              }`}>
+              <span className="text-lg font-bold ml-2" style={match.winner === 'B' ? greenText : mutedText}>
                 {match.score_b}
               </span>
             )}
           </div>
         ) : (
-          <div className="text-gray-600 text-sm">TBD</div>
+          <div className="text-sm" style={{ color: '#52525b' }}>TBD</div>
         )}
       </div>
 
       {/* Match Status */}
       {match.game?.status === 'in_progress' && (
-        <div className="px-3 py-1 bg-rally-dark text-center">
-          <span className="text-xs text-green-400 font-medium">In Progress</span>
+        <div className="px-3 py-1 text-center" style={{ backgroundColor: '#27272a' }}>
+          <span className="text-xs font-medium" style={{ color: '#4ade80' }}>In Progress</span>
         </div>
       )}
       {canEdit && (
-        <div className="px-3 py-1 bg-rally-coral/10 text-center">
-          <span className="text-xs text-rally-coral font-medium">Click to enter score</span>
+        <div className="px-3 py-1 text-center" style={{ backgroundColor: 'rgba(255, 107, 107, 0.1)' }}>
+          <span className="text-xs font-medium" style={{ color: '#FF6B6B' }}>Click to enter score</span>
         </div>
       )}
       {!match.team_a && !match.team_b && (
-        <div className="px-3 py-1 bg-rally-dark text-center">
-          <span className="text-xs text-gray-500">Waiting for previous round</span>
+        <div className="px-3 py-1 text-center" style={{ backgroundColor: '#27272a' }}>
+          <span className="text-xs" style={{ color: '#71717a' }}>Waiting for previous round</span>
         </div>
       )}
     </div>
