@@ -1,8 +1,7 @@
 import { useRef, useState } from 'react';
-import html2canvas from 'html2canvas';
+import { toPng } from 'html-to-image';
 import { supabase } from '../lib/supabase';
 import { Team, TournamentGame, Tournament } from '../types';
-import { prepareForCapture, getOnCloneHandler } from '../utils/pngExport';
 
 interface BracketMatch {
   id?: string;
@@ -36,23 +35,35 @@ export default function TournamentBracket({ tournament, teams, matches, onMatchU
 
     setDownloading(true);
     try {
-      // Prepare element for capture (converts oklab/oklch colors to hex)
-      const cleanup = prepareForCapture(bracketRef.current);
+      // Temporarily expand everything so nothing gets clipped in the export
+      const scrollContainer = bracketRef.current.querySelector('.overflow-x-auto') as HTMLElement | null;
+      const originalWidth = bracketRef.current.style.width;
+      const originalMaxWidth = bracketRef.current.style.maxWidth;
+      const originalOverflow = bracketRef.current.style.overflow;
 
-      const canvas = await html2canvas(bracketRef.current, {
-        backgroundColor: '#1a1a2e',
-        scale: 2,
-        logging: false,
-        useCORS: true,
-        // Also convert colors in the cloned element as a safety measure
-        onclone: getOnCloneHandler(),
+      if (scrollContainer) {
+        scrollContainer.style.overflow = 'visible';
+      }
+      bracketRef.current.style.overflow = 'visible';
+      bracketRef.current.style.width = 'max-content';
+      bracketRef.current.style.maxWidth = 'none';
+
+      const dataUrl = await toPng(bracketRef.current, {
+        pixelRatio: 2,
+        backgroundColor: '#18181b',
       });
 
-      cleanup();
+      // Restore original styles
+      if (scrollContainer) {
+        scrollContainer.style.overflow = '';
+      }
+      bracketRef.current.style.overflow = originalOverflow;
+      bracketRef.current.style.width = originalWidth;
+      bracketRef.current.style.maxWidth = originalMaxWidth;
 
       const link = document.createElement('a');
       link.download = `${tournament.name.replace(/[^a-z0-9]/gi, '_')}_bracket.png`;
-      link.href = canvas.toDataURL('image/png');
+      link.href = dataUrl;
       link.click();
     } catch (error) {
       console.error('Error generating bracket image:', error);
@@ -374,24 +385,133 @@ function EliminationBracket({ teams, matches, onEditMatch }: { teams: Team[]; ma
 
   const bracket = generateBracket();
 
+  // Find the champion (winner of the finals)
+  const finalsMatch = bracket.length > 0 ? bracket[bracket.length - 1][0] : null;
+  const champion = finalsMatch?.winner
+    ? (finalsMatch.winner === 'A' ? finalsMatch.team_a : finalsMatch.team_b)
+    : null;
+
+  const MATCH_HEIGHT = 88;
+  const MATCH_WIDTH = 256;
+  const ROUND_GAP = 64;
+  const CONNECTOR_WIDTH = 32;
+  const totalHeightRef = Math.max(600, Math.pow(2, rounds - 1) * (MATCH_HEIGHT + 16));
+
   return (
     <div className="overflow-x-auto">
-      <div className="inline-flex gap-8 min-w-max p-4">
-        {bracket.map((roundMatches, roundIndex) => (
-          <div key={roundIndex} className="flex flex-col justify-around min-h-[600px]">
-            <h3
-              className="text-sm font-bold uppercase tracking-wider mb-4 text-center"
-              style={{ color: '#a1a1aa' }}
-            >
-              {getRoundDisplayName(roundIndex, rounds)}
-            </h3>
-            <div className="flex flex-col justify-around flex-1 gap-4">
-              {roundMatches.map((match) => (
-                <BracketMatchCard key={`${roundIndex}-${match.position}`} match={match} onEdit={onEditMatch} />
-              ))}
+      <div className="inline-flex min-w-max p-4 pr-8" style={{ gap: 0 }}>
+        {bracket.map((roundMatches, roundIndex) => {
+          const matchCount = roundMatches.length;
+          const totalHeight = totalHeightRef;
+          const spacing = totalHeight / matchCount;
+
+          return (
+            <div key={roundIndex} className="flex" style={{ gap: 0 }}>
+              {/* Round column */}
+              <div className="flex flex-col" style={{ width: MATCH_WIDTH }}>
+                <h3
+                  className="text-sm font-bold uppercase tracking-wider mb-4 text-center"
+                  style={{ color: '#a1a1aa' }}
+                >
+                  {getRoundDisplayName(roundIndex, rounds)}
+                </h3>
+                <div className="flex flex-col justify-around flex-1" style={{ minHeight: totalHeight }}>
+                  {roundMatches.map((match) => (
+                    <BracketMatchCard key={`${roundIndex}-${match.position}`} match={match} onEdit={onEditMatch} />
+                  ))}
+                </div>
+              </div>
+
+              {/* Connector lines SVG between this round and next */}
+              {roundIndex < bracket.length - 1 && (
+                <div className="flex flex-col" style={{ width: CONNECTOR_WIDTH + ROUND_GAP }}>
+                  {/* Spacer for header alignment */}
+                  <div className="mb-4" style={{ height: '1.25rem' }}>&nbsp;</div>
+                  <svg
+                    width={CONNECTOR_WIDTH + ROUND_GAP}
+                    height={totalHeight}
+                    className="flex-1"
+                    style={{ minHeight: totalHeight }}
+                  >
+                    {roundMatches.map((_, matchIdx) => {
+                      if (matchIdx % 2 !== 0) return null;
+                      const pairIdx = matchIdx / 2;
+
+                      // Y positions for the two source matches
+                      const y1 = spacing * matchIdx + spacing / 2;
+                      const y2 = spacing * (matchIdx + 1) + spacing / 2;
+                      // Y position for the destination match
+                      const nextSpacing = totalHeight / (matchCount / 2);
+                      const yMid = nextSpacing * pairIdx + nextSpacing / 2;
+
+                      const halfW = CONNECTOR_WIDTH / 2;
+                      const svgW = CONNECTOR_WIDTH + ROUND_GAP;
+
+                      return (
+                        <g key={pairIdx}>
+                          {/* Horizontal from match 1 */}
+                          <line x1={0} y1={y1} x2={halfW} y2={y1} stroke="#4a4a52" strokeWidth={2} />
+                          {/* Horizontal from match 2 */}
+                          <line x1={0} y1={y2} x2={halfW} y2={y2} stroke="#4a4a52" strokeWidth={2} />
+                          {/* Vertical connecting them */}
+                          <line x1={halfW} y1={y1} x2={halfW} y2={y2} stroke="#4a4a52" strokeWidth={2} />
+                          {/* Horizontal to next round */}
+                          <line x1={halfW} y1={yMid} x2={svgW} y2={yMid} stroke="#4a4a52" strokeWidth={2} />
+                        </g>
+                      );
+                    })}
+                  </svg>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Champion Column */}
+        {champion && (
+          <div className="flex" style={{ gap: 0 }}>
+            <div className="flex flex-col" style={{ width: CONNECTOR_WIDTH + ROUND_GAP }}>
+              <div className="mb-4" style={{ height: '1.25rem' }}>&nbsp;</div>
+              <svg
+                width={CONNECTOR_WIDTH + ROUND_GAP}
+                height={totalHeightRef}
+                className="flex-1"
+                style={{ minHeight: totalHeightRef }}
+              >
+                <line
+                  x1={0}
+                  y1={totalHeightRef / 2}
+                  x2={CONNECTOR_WIDTH + ROUND_GAP}
+                  y2={totalHeightRef / 2}
+                  stroke="#4a4a52"
+                  strokeWidth={2}
+                />
+              </svg>
+            </div>
+            <div className="flex flex-col" style={{ width: MATCH_WIDTH }}>
+              <h3
+                className="text-sm font-bold uppercase tracking-wider mb-4 text-center"
+                style={{ color: '#facc15' }}
+              >
+                Champion
+              </h3>
+              <div className="flex flex-col justify-around flex-1" style={{ minHeight: totalHeightRef }}>
+                <div
+                  className="w-64 rounded-xl border-2 overflow-hidden text-center py-4 px-3"
+                  style={{
+                    backgroundColor: 'rgba(250, 204, 21, 0.1)',
+                    borderColor: 'rgba(250, 204, 21, 0.4)',
+                  }}
+                >
+                  <div className="text-2xl mb-1">🏆</div>
+                  <div className="font-bold text-lg" style={{ color: '#facc15' }}>
+                    {champion.name}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        ))}
+        )}
       </div>
     </div>
   );

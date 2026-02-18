@@ -1,9 +1,8 @@
 import { useRef, useState, useEffect } from 'react';
-import html2canvas from 'html2canvas';
+import { toPng } from 'html-to-image';
 import { supabase } from '../lib/supabase';
 import { Tournament, Team } from '../types';
 import { formatTime } from '../utils/schedule';
-import { prepareForCapture, getOnCloneHandler } from '../utils/pngExport';
 
 interface ScheduledGame {
   id: string;
@@ -66,23 +65,14 @@ export default function TournamentSchedule({ tournament, teams, onGameUpdated }:
 
     setDownloading(true);
     try {
-      // Prepare element for capture (converts oklab/oklch colors to hex)
-      const cleanup = prepareForCapture(scheduleRef.current);
-
-      const canvas = await html2canvas(scheduleRef.current, {
-        backgroundColor: '#1a1a2e',
-        scale: 2,
-        logging: false,
-        useCORS: true,
-        // Also convert colors in the cloned element as a safety measure
-        onclone: getOnCloneHandler(),
+      const dataUrl = await toPng(scheduleRef.current, {
+        pixelRatio: 2,
+        backgroundColor: '#18181b',
       });
-
-      cleanup();
 
       const link = document.createElement('a');
       link.download = `${tournament.name.replace(/[^a-z0-9]/gi, '_')}_schedule.png`;
-      link.href = canvas.toDataURL('image/png');
+      link.href = dataUrl;
       link.click();
     } catch (error) {
       console.error('Error generating schedule image:', error);
