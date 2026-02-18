@@ -10,7 +10,7 @@ interface SessionWithGames extends Session {
 export default function SessionHistory() {
   const [sessions, setSessions] = useState<SessionWithGames[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'completed'>('all');
+  const [filter, setFilter] = useState<'all' | 'completed'>('completed');
 
   useEffect(() => {
     fetchSessions();
@@ -184,7 +184,7 @@ export default function SessionHistory() {
 
                 {session.completed_at && (
                   <div className="text-sm text-gray-500 mt-2 md:mt-0">
-                    Completed {new Date(session.completed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    Completed {new Date(session.completed_at).toLocaleDateString([], { month: 'short', day: 'numeric' })} at {new Date(session.completed_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                   </div>
                 )}
               </div>

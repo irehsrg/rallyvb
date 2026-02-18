@@ -648,7 +648,7 @@ export default function Profile() {
 
           <div className="stat-card">
             <div className="text-4xl font-bold text-orange-400">
-              {player.win_streak > 0 ? `🔥 ${player.win_streak}` : '-'}
+              {player.win_streak > 0 ? `🔥 ${player.win_streak}` : '0'}
             </div>
             <div className="text-sm text-gray-400 mt-2">Current Streak</div>
           </div>
@@ -659,14 +659,14 @@ export default function Profile() {
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-xl font-semibold text-gray-100">Achievements</h3>
             <span className="text-sm text-gray-400">
-              {achievements.length} / {allAchievements.length} Unlocked
+              {allAchievements.filter(a => unlockedAchievements.has(a.type) || a.requirement).length} / {allAchievements.length} Unlocked
             </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {allAchievements.map((achievement) => {
               const def = achievementDefs[achievement.type];
-              const isUnlocked = unlockedAchievements.has(achievement.type);
+              const isUnlocked = unlockedAchievements.has(achievement.type) || achievement.requirement;
 
               return (
                 <div

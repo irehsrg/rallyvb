@@ -435,7 +435,7 @@ export default function Home() {
 
             <div className="stat-card">
               <div className="text-3xl font-bold text-orange-400">
-                {player.win_streak > 0 ? `🔥 ${player.win_streak}` : '-'}
+                {player.win_streak > 0 ? `🔥 ${player.win_streak}` : '0'}
               </div>
               <div className="text-sm text-gray-400 mt-1">Streak</div>
             </div>
