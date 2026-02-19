@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Team } from '../types';
+import { useAuth } from '../contexts/AuthContext';
+import { getAdminPermissions } from '../utils/permissions';
 
 interface TeamWithMembers extends Team {
   member_count: number;
@@ -9,10 +11,16 @@ interface TeamWithMembers extends Team {
 }
 
 export default function Teams() {
+  const { player } = useAuth();
+  const permissions = getAdminPermissions(player);
   const [teams, setTeams] = useState<TeamWithMembers[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'wins' | 'tournaments'>('name');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newTeamName, setNewTeamName] = useState('');
+  const [newTeamDescription, setNewTeamDescription] = useState('');
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     fetchTeams();
@@ -63,6 +71,45 @@ export default function Teams() {
     }
   };
 
+  const handleCreateTeam = async () => {
+    if (!newTeamName.trim() || !player) return;
+    setCreating(true);
+    try {
+      const { data: team, error } = await supabase
+        .from('teams')
+        .insert({
+          name: newTeamName.trim(),
+          description: newTeamDescription.trim() || null,
+          created_by: player.id,
+          is_active: true,
+          wins: 0,
+          losses: 0,
+          tournaments_played: 0,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      await supabase.from('team_members').insert({
+        team_id: team.id,
+        player_id: player.id,
+        role: 'manager',
+        is_active: true,
+      });
+
+      setShowCreateModal(false);
+      setNewTeamName('');
+      setNewTeamDescription('');
+      fetchTeams();
+    } catch (error: any) {
+      console.error('Error creating team:', error);
+      alert('Failed to create team: ' + error.message);
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const getWinRate = (team: Team) => {
     const totalGames = team.wins + team.losses;
     if (totalGames === 0) return 0;
@@ -98,9 +145,22 @@ export default function Teams() {
     <div className="min-h-screen bg-rally-darker">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="mb-8 animate-fade-in">
-          <h1 className="text-4xl font-bold text-gray-100 mb-2">Teams</h1>
-          <p className="text-gray-400">Browse and join volleyball teams</p>
+        <div className="flex items-center justify-between mb-8 animate-fade-in">
+          <div>
+            <h1 className="text-4xl font-bold text-gray-100 mb-2">Teams</h1>
+            <p className="text-gray-400">Browse and join volleyball teams</p>
+          </div>
+          {(permissions.canCreateTeams || permissions.canManageAllTeams) && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="btn-primary flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Create Team
+            </button>
+          )}
         </div>
 
         {/* Search and Filter */}
@@ -281,6 +341,64 @@ export default function Teams() {
           </div>
         )}
       </div>
+
+      {/* Create Team Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="card-glass max-w-md w-full p-8 animate-fade-in">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-100">Create Team</h2>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="w-8 h-8 rounded-lg bg-rally-dark/50 hover:bg-rally-dark flex items-center justify-center transition-colors"
+              >
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Team Name *</label>
+                <input
+                  type="text"
+                  value={newTeamName}
+                  onChange={(e) => setNewTeamName(e.target.value)}
+                  placeholder="e.g. Matchblocks Twenty"
+                  className="input-modern w-full"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Description</label>
+                <textarea
+                  value={newTeamDescription}
+                  onChange={(e) => setNewTeamDescription(e.target.value)}
+                  placeholder="Optional team description..."
+                  className="input-modern w-full h-24 resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="flex-1 px-4 py-3 bg-rally-dark border border-white/10 rounded-xl text-gray-300 hover:bg-rally-light transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateTeam}
+                disabled={creating || !newTeamName.trim()}
+                className="flex-1 btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {creating ? 'Creating...' : 'Create Team'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

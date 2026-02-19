@@ -360,6 +360,7 @@ export default function Admin() {
       });
 
       alert(`Session created successfully for ${new Date(sessionDate).toLocaleDateString()}!`);
+      setShowQRCode(true);
       setSessionDate(new Date().toISOString().split('T')[0]); // Reset to today
       setSelectedVenueId('');
       setLocationName('');
@@ -1355,7 +1356,7 @@ export default function Admin() {
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="card-glass max-w-md w-full p-8 animate-fade-in">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-100">Guest Check-in QR Code</h2>
+                <h2 className="text-2xl font-bold text-gray-100">Share Session</h2>
                 <button
                   onClick={() => setShowQRCode(false)}
                   className="w-8 h-8 rounded-lg bg-rally-dark/50 hover:bg-rally-dark flex items-center justify-center transition-colors"
@@ -1390,9 +1391,47 @@ export default function Admin() {
                 )}
               </div>
 
-              <div className="mt-6 p-4 bg-rally-dark/50 rounded-xl">
-                <p className="text-xs text-gray-400 text-center">
-                  <strong className="text-gray-300">Note:</strong> Guest accounts are temporary and won't save rating history
+              <div className="mt-6 space-y-3">
+                <div className="p-4 bg-rally-dark/50 rounded-xl">
+                  <p className="text-xs text-gray-400 mb-2 font-medium">Check-in Link (for signed-in players)</p>
+                  <div className="flex gap-2">
+                    <input
+                      readOnly
+                      value={`${window.location.origin}/home`}
+                      className="input-modern flex-1 text-sm"
+                    />
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/home`);
+                        alert('Link copied!');
+                      }}
+                      className="px-4 py-2 bg-rally-coral/20 hover:bg-rally-coral/30 text-rally-coral rounded-xl text-sm font-medium transition-all whitespace-nowrap"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+                <div className="p-4 bg-rally-dark/50 rounded-xl">
+                  <p className="text-xs text-gray-400 mb-2 font-medium">Guest Check-in Link (no account needed)</p>
+                  <div className="flex gap-2">
+                    <input
+                      readOnly
+                      value={`${window.location.origin}/guest-checkin/${activeSession.id}`}
+                      className="input-modern flex-1 text-sm"
+                    />
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/guest-checkin/${activeSession.id}`);
+                        alert('Link copied!');
+                      }}
+                      className="px-4 py-2 bg-rally-coral/20 hover:bg-rally-coral/30 text-rally-coral rounded-xl text-sm font-medium transition-all whitespace-nowrap"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 text-center">
+                  Guest accounts are temporary and won't save rating history
                 </p>
               </div>
             </div>

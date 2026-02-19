@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase';
 import { Tournament, Team, TournamentGame, Venue } from '../types';
 import TournamentBracket from '../components/TournamentBracket';
 import TournamentSchedule from '../components/TournamentSchedule';
+import { useAuth } from '../contexts/AuthContext';
+import { getAdminPermissions } from '../utils/permissions';
 
 interface TournamentWithVenue extends Tournament {
   venue?: Venue;
@@ -11,14 +13,19 @@ interface TournamentWithVenue extends Tournament {
 
 export default function TournamentView() {
   const { tournamentId } = useParams<{ tournamentId: string }>();
+  const { player } = useAuth();
+  const permissions = getAdminPermissions(player);
   const [tournament, setTournament] = useState<TournamentWithVenue | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [matches, setMatches] = useState<TournamentGame[]>([]);
   const [loading, setLoading] = useState(true);
+  const [availableTeams, setAvailableTeams] = useState<Team[]>([]);
+  const [registering, setRegistering] = useState(false);
 
   useEffect(() => {
     if (tournamentId) {
       fetchTournamentData();
+      fetchAvailableTeams();
     }
   }, [tournamentId]);
 
@@ -64,6 +71,78 @@ export default function TournamentView() {
       console.error('Error fetching tournament data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAvailableTeams = async () => {
+    try {
+      // Get all active teams
+      const { data: allTeams, error: allError } = await supabase
+        .from('teams')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
+
+      if (allError) throw allError;
+
+      // Get teams already registered for this tournament
+      const { data: registered, error: regError } = await supabase
+        .from('tournament_teams')
+        .select('team_id')
+        .eq('tournament_id', tournamentId);
+
+      if (regError) throw regError;
+
+      const registeredIds = new Set(registered?.map((r: any) => r.team_id) || []);
+      const available = (allTeams || []).filter((t: Team) => !registeredIds.has(t.id));
+      setAvailableTeams(available);
+    } catch (error) {
+      console.error('Error fetching available teams:', error);
+    }
+  };
+
+  const handleRegisterTeam = async (teamId: string) => {
+    if (registering) return;
+    setRegistering(true);
+    try {
+      const nextSeed = teams.length + 1;
+      const { error } = await supabase
+        .from('tournament_teams')
+        .insert({
+          tournament_id: tournamentId,
+          team_id: teamId,
+          seed: nextSeed,
+        });
+
+      if (error) throw error;
+      await fetchTournamentData();
+      await fetchAvailableTeams();
+    } catch (error: any) {
+      console.error('Error registering team:', error);
+      alert('Failed to register team: ' + error.message);
+    } finally {
+      setRegistering(false);
+    }
+  };
+
+  const handleUnregisterTeam = async (teamId: string) => {
+    if (registering) return;
+    setRegistering(true);
+    try {
+      const { error } = await supabase
+        .from('tournament_teams')
+        .delete()
+        .eq('tournament_id', tournamentId)
+        .eq('team_id', teamId);
+
+      if (error) throw error;
+      await fetchTournamentData();
+      await fetchAvailableTeams();
+    } catch (error: any) {
+      console.error('Error unregistering team:', error);
+      alert('Failed to remove team: ' + error.message);
+    } finally {
+      setRegistering(false);
     }
   };
 
@@ -220,26 +299,110 @@ export default function TournamentView() {
 
         {/* Schedule / Bracket / Standings */}
         {tournament.status === 'setup' ? (
-          <div className="card-glass p-12 text-center">
-            <svg className="w-16 h-16 mx-auto mb-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <h3 className="text-xl font-semibold text-gray-300 mb-2">Tournament Not Started</h3>
-            <p className="text-gray-500">The schedule and bracket will be available once the tournament begins</p>
-            <div className="mt-6">
-              <h4 className="font-semibold text-gray-300 mb-3">Registered Teams</h4>
-              <div className="flex flex-wrap justify-center gap-2">
-                {teams.map((team) => (
-                  <Link
-                    key={team.id}
-                    to={`/teams/${team.id}`}
-                    className="px-4 py-2 bg-rally-dark/50 hover:bg-rally-dark rounded-lg text-gray-300 hover:text-rally-coral transition-all"
-                  >
-                    {team.name}
-                  </Link>
-                ))}
+          <div className="space-y-6 animate-slide-up">
+            {/* Registration Banner */}
+            <div className="card-glass p-6">
+              <div className="flex items-center gap-3 mb-1">
+                <div className="w-3 h-3 rounded-full bg-green-400 animate-pulse" />
+                <h3 className="text-xl font-bold text-gray-100">Registration Open</h3>
               </div>
+              <p className="text-gray-400">
+                {teams.length} team{teams.length !== 1 ? 's' : ''} registered
+                {tournament.max_teams ? ` of ${tournament.max_teams} max` : ''}
+                {' — '}schedule and bracket will be available once the tournament begins
+              </p>
             </div>
+
+            {/* Registered Teams */}
+            <div className="card-glass p-6">
+              <h4 className="font-semibold text-gray-100 mb-4">
+                Registered Teams ({teams.length})
+              </h4>
+              {teams.length === 0 ? (
+                <div className="text-center py-8">
+                  <svg className="w-12 h-12 mx-auto mb-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  <p className="text-gray-500 mb-2">No teams registered yet</p>
+                  <Link to="/teams" className="text-rally-coral hover:underline text-sm">
+                    Create a team first →
+                  </Link>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {teams.map((team, index) => (
+                    <div key={team.id} className="flex items-center gap-3 p-3 bg-rally-dark/50 rounded-xl group">
+                      <div className="w-8 h-8 rounded-lg bg-rally-dark flex items-center justify-center text-sm font-bold text-gray-400 shrink-0">
+                        #{index + 1}
+                      </div>
+                      {team.logo_url ? (
+                        <img src={team.logo_url} alt={team.name} className="w-10 h-10 rounded-lg object-cover border border-white/10" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg bg-gradient-rally flex items-center justify-center shrink-0">
+                          <span className="text-sm font-bold text-white">{team.name.charAt(0).toUpperCase()}</span>
+                        </div>
+                      )}
+                      <Link to={`/teams/${team.id}`} className="flex-1 min-w-0">
+                        <span className="font-medium text-gray-200 hover:text-rally-coral transition-colors truncate block">
+                          {team.name}
+                        </span>
+                      </Link>
+                      {(permissions.canManageTournaments || permissions.canRegisterTeamsForTournaments) && (
+                        <button
+                          onClick={() => handleUnregisterTeam(team.id)}
+                          disabled={registering}
+                          className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-400/10 transition-all opacity-0 group-hover:opacity-100"
+                          title="Remove from tournament"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Add Teams (admin only) */}
+            {(permissions.canManageTournaments || permissions.canRegisterTeamsForTournaments) && (
+              <div className="card-glass p-6">
+                <h4 className="font-semibold text-gray-100 mb-4">Add Teams</h4>
+                {availableTeams.length === 0 ? (
+                  <div className="text-center py-6">
+                    <p className="text-gray-500 mb-2">
+                      {teams.length > 0 ? 'All teams are already registered' : 'No teams available'}
+                    </p>
+                    <Link to="/teams" className="text-rally-coral hover:underline text-sm">
+                      Create a new team →
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {availableTeams.map((team) => (
+                      <div key={team.id} className="flex items-center gap-3 p-3 bg-rally-dark/30 rounded-xl border border-dashed border-white/10">
+                        {team.logo_url ? (
+                          <img src={team.logo_url} alt={team.name} className="w-10 h-10 rounded-lg object-cover border border-white/10" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-rally-dark flex items-center justify-center shrink-0">
+                            <span className="text-sm font-bold text-gray-400">{team.name.charAt(0).toUpperCase()}</span>
+                          </div>
+                        )}
+                        <span className="flex-1 min-w-0 font-medium text-gray-400 truncate">{team.name}</span>
+                        <button
+                          onClick={() => handleRegisterTeam(team.id)}
+                          disabled={registering || (!!tournament.max_teams && teams.length >= tournament.max_teams)}
+                          className="px-3 py-1.5 bg-rally-coral/20 text-rally-coral rounded-lg text-sm font-medium hover:bg-rally-coral/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                        >
+                          + Register
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-8 animate-slide-up">

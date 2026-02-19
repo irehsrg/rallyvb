@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Session as SessionType, Player, Waitlist } from '../types';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { getAdminPermissions } from '../utils/permissions';
 import GroupsModal from '../components/GroupsModal';
 import VenueSelector from '../components/VenueSelector';
 import VenueFollowButton from '../components/VenueFollowButton';
@@ -26,6 +27,8 @@ interface UpcomingGame {
 
 export default function Home() {
   const { player } = useAuth();
+  const navigate = useNavigate();
+  const permissions = getAdminPermissions(player);
   const [currentSession, setCurrentSession] = useState<SessionType | null>(null);
   const [checkedIn, setCheckedIn] = useState(false);
   const [checkinCount, setCheckinCount] = useState(0);
@@ -439,6 +442,66 @@ export default function Home() {
               </div>
               <div className="text-sm text-gray-400 mt-1">Streak</div>
             </div>
+          </div>
+        )}
+
+        {/* Admin Quick Actions */}
+        {player?.is_admin && (permissions.canCreateSession || permissions.canCreateTournaments || permissions.canCreateTeams) && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8 animate-slide-up">
+            {permissions.canCreateSession && !currentSession && (
+              <button
+                onClick={() => navigate('/admin')}
+                className="card-glass p-5 hover:scale-[1.02] transition-all duration-300 group text-left"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-100">Start Session</h3>
+                    <p className="text-xs text-gray-400">Create a pickup game</p>
+                  </div>
+                </div>
+              </button>
+            )}
+            {permissions.canCreateTournaments && (
+              <button
+                onClick={() => navigate('/admin')}
+                className="card-glass p-5 hover:scale-[1.02] transition-all duration-300 group text-left"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-100">Create Tournament</h3>
+                    <p className="text-xs text-gray-400">Set up a season or bracket</p>
+                  </div>
+                </div>
+              </button>
+            )}
+            {permissions.canCreateTeams && (
+              <button
+                onClick={() => navigate('/teams')}
+                className="card-glass p-5 hover:scale-[1.02] transition-all duration-300 group text-left"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-100">Create Team</h3>
+                    <p className="text-xs text-gray-400">Build a roster</p>
+                  </div>
+                </div>
+              </button>
+            )}
           </div>
         )}
 
