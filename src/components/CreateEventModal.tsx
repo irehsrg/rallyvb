@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Venue, EventSkillLevel } from '../types';
 import { notifyNewEvent } from '../utils/notifications';
+import { safeHttpUrl } from '../utils/url';
 
 interface CreateEventModalProps {
   onClose: () => void;
@@ -71,6 +72,11 @@ export default function CreateEventModal({ onClose, onCreated, editEvent }: Crea
       alert('Please enter a location');
       return;
     }
+    const mapsUrl = !useVenue ? safeHttpUrl(googleMapsUrl) : null;
+    if (!useVenue && googleMapsUrl.trim() && !mapsUrl) {
+      alert('Google Maps URL must start with http:// or https://');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -81,7 +87,7 @@ export default function CreateEventModal({ onClose, onCreated, editEvent }: Crea
         venue_id: useVenue ? venueId || null : null,
         custom_location: !useVenue ? customLocation.trim() : null,
         custom_address: !useVenue ? customAddress.trim() || null : null,
-        google_maps_url: !useVenue ? googleMapsUrl.trim() || null : null,
+        google_maps_url: mapsUrl,
         event_date: eventDate,
         start_time: startTime,
         end_time: endTime || null,

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { safeHttpUrl } from '../utils/url';
 import { useAuth } from '../contexts/AuthContext';
 import { OpenSession, OpenSessionRSVP, OpenSessionComment, RSVPStatus } from '../types';
 import { getAdminPermissions } from '../utils/permissions';
@@ -433,9 +434,9 @@ export default function EventDetail() {
                 <div className="text-gray-400 text-sm">
                   {(event.venue as any)?.address || event.custom_address}
                 </div>
-                {((event.venue as any)?.google_maps_url || event.google_maps_url) && (
+                {safeHttpUrl((event.venue as any)?.google_maps_url || event.google_maps_url) && (
                   <a
-                    href={(event.venue as any)?.google_maps_url || event.google_maps_url}
+                    href={safeHttpUrl((event.venue as any)?.google_maps_url || event.google_maps_url)!}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-rally-coral text-sm hover:underline"
