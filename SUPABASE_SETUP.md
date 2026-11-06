@@ -121,6 +121,9 @@ CREATE POLICY "Players are viewable by everyone"
 
 CREATE POLICY "Users can update own profile"
   ON players FOR UPDATE USING (auth.uid() = id);
+-- IMPORTANT: this policy alone lets users edit ANY column on their own row,
+-- including is_admin. Run supabase/migrations/20261105_security_hardening.sql
+-- afterwards (see Step 2b) to lock down privileged columns.
 
 CREATE POLICY "New users can insert their profile"
   ON players FOR INSERT WITH CHECK (auth.uid() = id);
@@ -186,6 +189,15 @@ CREATE POLICY "Users can view own rating history"
 ```
 
 4. Click **Run** again
+
+### Step 2b: Lock Down Privileged Player Columns (required)
+
+Run the contents of `supabase/migrations/20261105_security_hardening.sql` in the SQL Editor.
+It adds `current_user_is_admin()` / `current_user_is_super_admin()` helpers, an
+"Admins can update players" policy, and a trigger that rejects changes to
+`is_admin`, `admin_role`, `rating`, win/loss stats and ban fields unless the caller
+is an admin (role columns: super admin only). Without it any signed-in user,
+including guests, can promote themselves to admin.
 
 ### Step 3: Create Auto-Signup Trigger
 

@@ -323,10 +323,105 @@ function formatNotification(request: PushRequest): { title: string; body: string
       return {
         title: request.title || 'Rally',
         body: request.body || 'You have a new notification',
-        data: { type: 'custom', url: request.url || '/' }
+        data: { type: 'custom', url: safePath(request.url) }
       }
     default:
       return { title: 'Rally', body: 'You have a new notification', data: { type: 'unknown', url: '/' } }
+  }
+}
+
+// Only same-origin relative paths are allowed as notification targets.
+function safePath(value: string | undefined): string {
+  if (!value) return '/'
+  try {
+    const parsed = new URL(value, 'https://rally.invalid')
+    if (parsed.origin !== 'https://rally.invalid') return '/'
+    if (parsed.pathname.startsWith('//')) return '/'
+    return parsed.pathname + parsed.search + parsed.hash
+  } catch {
+    return '/'
+  }
+}
+
+interface Caller {
+  id: string
+  name: string
+  isAdmin: boolean
+}
+
+function jsonResponse(payload: object, status = 200): Response {
+  return new Response(JSON.stringify(payload), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    status,
+  })
+}
+
+// Resolve the calling user from the Authorization header. Requests that only
+// carry the anon key (no user session) are rejected.
+async function authenticateCaller(req: Request, supabase: ReturnType<typeof createClient>): Promise<Caller | null> {
+  const authHeader = req.headers.get('Authorization') || ''
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim()
+  if (!token) return null
+
+  const { data: { user }, error } = await supabase.auth.getUser(token)
+  if (error || !user) return null
+
+  const { data: player } = await supabase
+    .from('players')
+    .select('id, name, is_admin')
+    .eq('id', user.id)
+    .single()
+  if (!player) return null
+
+  return { id: player.id, name: player.name, isAdmin: !!player.is_admin }
+}
+
+// Decide whether this caller may send this notification. Non-admins may only
+// trigger notifications about things they demonstrably did themselves.
+async function authorize(body: PushRequest, caller: Caller, supabase: ReturnType<typeof createClient>): Promise<string | null> {
+  if (caller.isAdmin) return null
+
+  switch (body.type) {
+    case 'new_event': {
+      if (!body.eventId) return 'eventId required'
+      const { data: event } = await supabase
+        .from('open_sessions')
+        .select('id, host_id, is_public, title')
+        .eq('id', body.eventId)
+        .single()
+      if (!event || event.host_id !== caller.id) return 'You can only announce events you host'
+      if (!event.is_public) return 'Only public events can be announced'
+      // Use the stored title and the caller's real name so neither can be spoofed
+      body.eventDetails = { ...(body.eventDetails || { title: event.title }), title: event.title, host: caller.name }
+      return null
+    }
+    case 'comment_reply': {
+      if (!body.eventId || !body.playerId) return 'eventId and playerId required'
+      if (body.playerId === caller.id) return 'Cannot notify yourself'
+      // The caller must have actually replied to a comment by the recipient on this event
+      const { data: replies } = await supabase
+        .from('open_session_comments')
+        .select('parent_id')
+        .eq('session_id', body.eventId)
+        .eq('player_id', caller.id)
+        .not('parent_id', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(20)
+      const parentIds = (replies || []).map((r: any) => r.parent_id).filter(Boolean)
+      if (parentIds.length === 0) return 'No reply found'
+      const { data: parents } = await supabase
+        .from('open_session_comments')
+        .select('id')
+        .in('id', parentIds)
+        .eq('player_id', body.playerId)
+        .limit(1)
+      if (!parents || parents.length === 0) return 'No reply to this player found'
+      const { data: event } = await supabase.from('open_sessions').select('title').eq('id', body.eventId).single()
+      body.eventDetails = { title: event?.title || 'an event', commenterName: caller.name }
+      return null
+    }
+    default:
+      return 'Admin access required for this notification type'
   }
 }
 
@@ -341,7 +436,22 @@ serve(async (req) => {
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
+    const caller = await authenticateCaller(req, supabase)
+    if (!caller) {
+      return jsonResponse({ success: false, error: 'Unauthorized' }, 401)
+    }
+
     const body: PushRequest = await req.json()
+    if (!body || typeof body.type !== 'string') {
+      return jsonResponse({ success: false, error: 'Invalid request' }, 400)
+    }
+
+    const denied = await authorize(body, caller, supabase)
+    if (denied) {
+      return jsonResponse({ success: false, error: denied }, 403)
+    }
+
     const notification = formatNotification(body)
 
     let recipients: DBPushSubscription[] = []
@@ -418,6 +528,8 @@ serve(async (req) => {
         }
         break
       }
+      default:
+        return jsonResponse({ success: false, error: 'Unknown notification type' }, 400)
     }
 
     const expiredSubscriptions: string[] = []
@@ -450,20 +562,14 @@ serve(async (req) => {
       await supabase.from('push_subscriptions').delete().in('endpoint', expiredSubscriptions)
     }
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        sent: results.filter(r => r.success).length,
-        failed: results.filter(r => !r.success).length,
-        results,
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return jsonResponse({
+      success: true,
+      sent: results.filter(r => r.success).length,
+      failed: results.filter(r => !r.success).length,
+      results,
+    })
   } catch (error: any) {
     console.error('Push Error:', error)
-    return new Response(
-      JSON.stringify({ success: false, error: error.message }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-    )
+    return jsonResponse({ success: false, error: error.message }, 400)
   }
 })

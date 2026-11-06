@@ -1,21 +1,23 @@
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+import { supabase } from '../lib/supabase';
 
-// Send push notification via Edge Function
+// Send push notification via Edge Function.
+// supabase.functions.invoke attaches the signed-in user's access token, which the
+// Edge Function verifies before sending anything (anon-key-only calls are rejected).
 async function sendPush(payload: object): Promise<boolean> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/send-push`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify(payload),
-    });
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      console.warn('[Push] Not signed in; skipping notification');
+      return false;
+    }
 
-    const result = await response.json();
-    console.log('[Push] Result:', result);
-    return result.success;
+    const { data, error } = await supabase.functions.invoke('send-push', { body: payload });
+    if (error) {
+      console.error('[Push] Error:', error);
+      return false;
+    }
+    console.log('[Push] Result:', data);
+    return !!data?.success;
   } catch (error) {
     console.error('[Push] Error:', error);
     return false;

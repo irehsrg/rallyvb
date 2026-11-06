@@ -3,6 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Session } from '../types';
 
+// Cryptographically random hex string (2 chars per byte)
+function randomToken(bytes: number): string {
+  const buffer = new Uint8Array(bytes);
+  crypto.getRandomValues(buffer);
+  return Array.from(buffer, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 export default function GuestCheckin() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
@@ -48,7 +55,7 @@ export default function GuestCheckin() {
     try {
       // Create or find guest player
       // Use simple format: guest{timestamp}@rally.app (no underscores or special chars)
-      const guestEmail = `guest${Date.now()}${Math.random().toString(36).substring(2, 6)}@rally.app`;
+      const guestEmail = `guest${Date.now()}${randomToken(4)}@rally.app`;
 
       // Check if guest already exists (by name in this session)
       const { data: existingCheckin } = await supabase
@@ -72,7 +79,7 @@ export default function GuestCheckin() {
       // Create guest player account
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: guestEmail,
-        password: Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2),
+        password: randomToken(32),
         options: {
           data: {
             name: `${guestName.trim()} (Guest)`,

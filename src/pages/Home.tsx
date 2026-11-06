@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { safeHttpUrl } from '../utils/url';
 import { Session as SessionType, Player, Waitlist } from '../types';
 import { Link, useNavigate } from 'react-router-dom';
 import { getAdminPermissions } from '../utils/permissions';
@@ -629,7 +630,7 @@ export default function Home() {
                   </div>
                   <a
                     href={
-                      currentSession.venue?.google_maps_url ||
+                      safeHttpUrl(currentSession.venue?.google_maps_url) ||
                       `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
                         currentSession.venue?.address || currentSession.location_name || ''
                       )}`

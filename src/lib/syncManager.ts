@@ -12,6 +12,29 @@ import { PendingAction, PendingActionType } from '../types';
 
 const MAX_RETRIES = 3;
 
+// Only these profile fields may be written through the offline sync queue.
+// Privileged columns (rating, is_admin, ...) are also blocked server-side.
+const PROFILE_UPDATE_FIELDS = [
+  'name',
+  'position',
+  'skill_level',
+  'bio',
+  'profile_photo_url',
+  'push_notifications_enabled',
+  'notification_preferences',
+] as const;
+
+function pickProfileFields(updates: unknown): Record<string, unknown> {
+  const safe: Record<string, unknown> = {};
+  if (!updates || typeof updates !== 'object') return safe;
+  for (const key of PROFILE_UPDATE_FIELDS) {
+    if (key in (updates as Record<string, unknown>)) {
+      safe[key] = (updates as Record<string, unknown>)[key];
+    }
+  }
+  return safe;
+}
+
 export interface SyncResult {
   success: boolean;
   synced: number;
@@ -56,13 +79,16 @@ async function processAction(action: PendingAction): Promise<boolean> {
         if (scoreError) throw scoreError;
         break;
 
-      case 'update_profile':
+      case 'update_profile': {
+        const updates = pickProfileFields(action.payload.updates);
+        if (Object.keys(updates).length === 0) break;
         const { error: profileError } = await supabase
           .from('players')
-          .update(action.payload.updates)
+          .update(updates)
           .eq('id', action.payload.playerId);
         if (profileError) throw profileError;
         break;
+      }
 
       case 'follow_venue':
         const { error: followError } = await supabase

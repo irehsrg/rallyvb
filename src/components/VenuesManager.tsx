@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase, logAdminAction } from '../lib/supabase';
+import { safeHttpUrl } from '../utils/url';
 import { Venue } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -162,9 +163,9 @@ export default function VenuesManager() {
                   </div>
                 </div>
                 <div className="flex flex-col gap-2">
-                  {venue.google_maps_url && (
+                  {safeHttpUrl(venue.google_maps_url) && (
                     <a
-                      href={venue.google_maps_url}
+                      href={safeHttpUrl(venue.google_maps_url)!}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="px-3 py-1.5 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 text-sm font-medium transition-all text-center"
@@ -239,6 +240,11 @@ function VenueFormModal({ venue, onClose, onSuccess }: VenueFormModalProps) {
       alert('Please fill in venue name and address');
       return;
     }
+    const mapsUrl = safeHttpUrl(googleMapsUrl);
+    if (googleMapsUrl.trim() && !mapsUrl) {
+      alert('Google Maps URL must start with http:// or https://');
+      return;
+    }
 
     setSaving(true);
     try {
@@ -249,7 +255,7 @@ function VenueFormModal({ venue, onClose, onSuccess }: VenueFormModalProps) {
           .update({
             name: name.trim(),
             address: address.trim(),
-            google_maps_url: googleMapsUrl.trim() || null,
+            google_maps_url: mapsUrl,
             notes: notes.trim() || null,
             updated_at: new Date().toISOString(),
           })
@@ -271,7 +277,7 @@ function VenueFormModal({ venue, onClose, onSuccess }: VenueFormModalProps) {
           .insert({
             name: name.trim(),
             address: address.trim(),
-            google_maps_url: googleMapsUrl.trim() || null,
+            google_maps_url: mapsUrl,
             notes: notes.trim() || null,
             created_by: player?.id,
             is_active: true,

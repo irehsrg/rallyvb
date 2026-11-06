@@ -4,6 +4,7 @@ import { clientsClaim } from 'workbox-core';
 import { registerRoute } from 'workbox-routing';
 import { StaleWhileRevalidate, CacheFirst } from 'workbox-strategies';
 import { ExpirationPlugin } from 'workbox-expiration';
+import { sameOriginPath } from './utils/url';
 
 declare let self: ServiceWorkerGlobalScope;
 
@@ -116,7 +117,8 @@ self.addEventListener('notificationclick', (event: NotificationEvent) => {
   const notificationData = event.notification.data as PushPayload['data'];
 
   if (notificationData?.url) {
-    urlToOpen = notificationData.url;
+    // Only follow same-origin paths; a push payload must never send users off-site
+    urlToOpen = sameOriginPath(notificationData.url, self.location.origin);
   } else if (notificationData?.type) {
     switch (notificationData.type) {
       case 'session_created':
